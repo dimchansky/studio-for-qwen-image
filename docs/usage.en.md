@@ -20,13 +20,19 @@ Previews update at selected inference steps and can differ from the final result
 | Transparent background | Adds the upstream RGBA prompt request; the resulting alpha channel depends on the model output |
 | Thinking intensity | Controls supported Ollama chat models, independently of image inference steps |
 
-A seed does not guarantee identical pixels across devices, dependency versions or image dimensions. Uploaded reference images are resized to a maximum edge of 2048 pixels. Images larger than 25 megapixels are rejected.
+A seed does not guarantee identical pixels across devices, dependency versions or image dimensions. Uploads keep their original dimensions and alpha channel; images larger than 25 megapixels are rejected. The enhancer and image pipeline each apply their own area-based reference budget. See [Generation capabilities](generation.en.md) for enhancement, text, ratio, mask and advanced controls.
 
 ## Chat
 
 Start local Ollama and download a chat model first. The list comes from Ollama; names indicating embedding, OCR or cloud models are filtered out. For thinking-capable models, gpt-oss gets low, medium and high levels; other supported models may expose an on/off control.
 
 The chat assistant can help write prompts but does not automatically call an image tool. Switch to image mode to generate. Chat responses currently render as plain text.
+
+## Language and environment
+
+Choose 简体中文, English or System default under Settings → Interface. The environment screen has the same selection, which persists across launches. Menus, downloads, tasks, image previews and application errors change together. Chat history, user titles and model responses keep their original text.
+
+A discovered missing dependency returns the app to its environment screen. Passed items show 🎉, and required failures block entry. Select Install or repair dependencies to view installation progress and run checks again afterward. Use the supplied links for hardware or driver issues.
 
 ## Troubleshooting
 
@@ -44,12 +50,12 @@ Use the latest release with its pinned dependencies. Full-frame FP32 decoding an
 
 ### Windows fails to start or cannot find a GPU
 
-Run `setup.cmd`, install WebView2, and keep `.venv`, `app` and `backend` at the same directory level. Check `desktop.log`. Setup prints `CUDA available`; if it is False, check driver and PyTorch CUDA compatibility.
+Read the failed items on the environment screen. The native fallback offers a WebView2 download link; Install or repair dependencies handles Python packages. Keep the package directory intact and check `desktop.log`. GPU failures may require a compatible NVIDIA driver or PyTorch CUDA build.
 
 ### Mac cannot start Python
 
-Rerun `setup.command` and check that the original Python installation still exists. Virtual environments depend on the Python installation that created them. Removing or replacing it may require rebuilding the runtime. Check `app.log` in the data directory.
+Select Install or repair dependencies and check that the original Python installation still exists. Virtual environments depend on the Python installation that created them. Removing or replacing it may require rebuilding the runtime. Check `app.log` in the data directory.
 
 ### Share diagnostics
 
-Include OS, GPU or unified memory, app version, reproduction steps and the error text. Logs and Windows PNG metadata may contain prompts. Older logs or image metadata may also include local paths. Review them before posting publicly.
+Include OS, GPU or unified memory, app version, reproduction steps and the error text. Logs and PNG metadata on both platforms may contain prompts. Older logs or image metadata may also include local paths. Review them before posting publicly.

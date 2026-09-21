@@ -6,6 +6,10 @@ from urllib.parse import urlparse, unquote
 from urllib.request import Request, build_opener, ProxyHandler
 import psutil
 from model_sources import SOURCES, validate_source
+from environment_probe import is_environment_error
+from enhancer_assets import EnhancerAssets, TARGETS
+from generation_options import validate_options, resolve_size, exact_text, protect_text
+from image_jobs import run_image_job
 from studio_paths import data_path, model_path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,6 +28,7 @@ ACTIVE = None
 QUEUE = []
 STOPPING = False
 DOWNLOAD = None
+ENHANCERS = EnhancerAssets(MODEL.parent, DATA)
 REVISION = 'b3179ad355be050328e483a9dfdd9e60cd62adfa'
 
 @contextlib.contextmanager
@@ -37,16 +42,28 @@ with connection() as c:
     c.execute('CREATE TABLE IF NOT EXISTS preferences(key TEXT PRIMARY KEY,value TEXT)')
 
 def preferences(values=None):
-    defaults={'welcome_language':'zh','welcome_cycle':True,'download_source':None}
+    defaults={'welcome_language':'zh','welcome_cycle':True,'download_source':None,'interface_language':'auto'}
     with connection() as c:
         if values is not None:
             if not isinstance(values,dict) or set(values)-set(defaults): raise ValueError('未知设置。')
             if 'welcome_language' in values and values['welcome_language'] not in ('auto','zh','en'): raise ValueError('不支持的语言。')
+            if 'interface_language' in values and values['interface_language'] not in ('auto','zh','en'): raise ValueError('不支持的语言。')
             if 'welcome_cycle' in values and not isinstance(values['welcome_cycle'],bool): raise ValueError('轮换设置须为开关。')
             if 'download_source' in values: validate_source(values['download_source'])
             for key,value in values.items(): c.execute('INSERT OR REPLACE INTO preferences VALUES(?,?)',(key,json.dumps(value)))
         for row in c.execute('SELECT key,value FROM preferences'):
             if row['key'] in defaults: defaults[row['key']]=json.loads(row['value'])
+    language_file=DATA/'ui-language.txt'
+    if values and 'interface_language' in values:
+        temporary=DATA/('ui-language-'+uuid.uuid4().hex+'.tmp')
+        try:
+            temporary.write_text(values['interface_language'],encoding='utf-8')
+            temporary.replace(language_file)
+        finally:
+            temporary.unlink(missing_ok=True)
+    if language_file.exists():
+        chosen=language_file.read_text(encoding='utf-8-sig').strip()
+        if chosen in ('auto','zh','en'):defaults['interface_language']=chosen
     return defaults
 
 def read_session(sid):
@@ -97,7 +114,7 @@ def model_status():
     total=sum(x['size'] for x in files)
     done=sum(min((MODEL/x['path']).stat().st_size,x['size']) for x in files if (MODEL/x['path']).is_file())
     partial=sum(x.stat().st_size for x in MODEL.rglob('*') if x.is_file() and (x.name.endswith('.part') or '.chunk-' in x.name or x.name.endswith('.receiving')))
-    ready=all((MODEL/x['path']).is_file() and (MODEL/x['path']).stat().st_size==x['size'] for x in files)
+    ready=(MODEL/'.verified').is_file() and all((MODEL/x['path']).is_file() and (MODEL/x['path']).stat().st_size==x['size'] for x in files)
     running=DOWNLOAD is not None and DOWNLOAD.poll() is None
     try:
         pid=int((MODEL/'.download.pid').read_text())
@@ -142,7 +159,7 @@ def status():
         connected=True
     except Exception: models=[];connected=False
     with LOCK: active=JOBS.get(ACTIVE)
-    return {'model':model_status(),'ollama':connected,'chat_models':models,'chat_capabilities':{name:chat_capabilities(name) for name in models},'active':active,'pending':[JOBS[jid] for jid,_ in QUEUE],'data':str(DATA)}
+    return {'model':model_status(),'enhancers':{key:ENHANCERS.status(key) for key in TARGETS},'ollama':connected,'chat_models':models,'chat_capabilities':{name:chat_capabilities(name) for name in models},'active':active,'pending':[JOBS[jid] for jid,_ in QUEUE],'data':str(DATA)}
 
 def run_job(job, payload):
     global ACTIVE
@@ -150,7 +167,7 @@ def run_job(job, payload):
     try:
         if payload['mode']=='chat':
             job.update(stage='正在思考',progress=None)
-            messages=[{'role':'system','content':'你是一位中文创作助手，帮助用户讨论创意、构思画面和撰写图片提示词。你没有绘图工具。不要声称已生成或编辑图片；用户需要切换到“图像”模式来出图。'}]
+            messages=[{'role':'system','content':'You are a creative assistant. Reply in the user’s language. Help discuss ideas, compose scenes and write image prompts. You have no image tools. Never claim to have generated or edited images. Explain that the user can switch to Image mode to create them.'}]
             messages += chat_history(sid,job['id'],payload['prompt'])
             inp=DATA/'jobs'/f"{job['id']}.input.json";out=DATA/'jobs'/f"{job['id']}.status.json"
             inp.write_text(json.dumps({'history':messages,'chat_model':payload['chat_model'],'think':payload.get('think'),'status_path':str(out)}))
@@ -175,31 +192,28 @@ def run_job(job, payload):
                 for m in loaded:
                     with ollama('/api/generate',{'model':m['name'],'keep_alive':0},timeout=30) as r: r.read()
             except Exception: pass
-            inp=DATA/'jobs'/f"{job['id']}.input.json";out=DATA/'jobs'/f"{job['id']}.status.json"
-            config={**payload,'model_path':str(MODEL),'data':str(DATA),'status_path':str(out),'job_id':job['id']}
-            inp.write_text(json.dumps(config))
-            with (DATA/'jobs'/f"{job['id']}.log").open('w') as log:
-                proc=subprocess.Popen([sys.executable,'-X','utf8',str(ROOT/'backend/worker.py'),str(inp)],stdout=log,stderr=log,creationflags=CREATE_FLAGS,env={**os.environ,'PYTHONUTF8':'1','HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1','TOKENIZERS_PARALLELISM':'false'})
-                while proc.poll() is None:
-                    if job.get('cancel'):
-                        proc.terminate()
-                        try: proc.wait(timeout=8)
-                        except subprocess.TimeoutExpired: proc.kill();proc.wait()
-                        raise InterruptedError()
-                    if out.exists():
-                        with contextlib.suppress(Exception): job.update(json.loads(out.read_text()))
-                    time.sleep(.5)
-            if out.exists(): job.update(json.loads(out.read_text()))
-            if proc.returncode!=0: raise RuntimeError(job.get('error') or '推理进程退出。请在模型设置查看日志。')
-            if not job.get('image'): raise RuntimeError('没有收到生成图片。')
-            message(sid,'assistant','图片已生成。',[job['image']],{'job_id':job['id'],'mode':'image','seed':job['seed'],'width':payload['width'],'height':payload['height'],'steps':payload['steps'],'seconds':round(time.time()-job['started'])})
+            result=run_image_job(job,payload,ROOT,DATA,MODEL,ENHANCERS)
+            message(sid,'assistant','图片已生成。',result['images'],result['meta'])
         job.update(state='done',stage='完成',progress=1)
     except InterruptedError:
         job.update(state='cancelled',stage='已停止')
         message(sid,'assistant','已停止本次任务。',meta={'cancelled':True,'job_id':job['id']})
     except Exception as e:
-        job.update(state='error',stage='任务失败',error=str(e))
+        diagnostic=str(e)
+        log_path=DATA/'jobs'/f"{job['id']}.log"
+        with contextlib.suppress(OSError):
+            with log_path.open('rb') as stream:
+                stream.seek(max(0,log_path.stat().st_size-16000));diagnostic+='\n'+stream.read().decode(errors='replace')
+        job.update(state='error',stage='任务失败',error=str(e),environment_error=is_environment_error(diagnostic))
         message(sid,'assistant',str(e),meta={'error':True,'job_id':job['id']})
+        if job.get('environment_error'):
+            # A broken runtime cannot execute queued work. Keep every prompt in
+            # its chat, with an explicit result, instead of repeatedly failing.
+            with LOCK:
+                for queued_id,_ in QUEUE:
+                    queued=JOBS[queued_id];queued.update(state='cancelled',stage='已停止')
+                    message(queued['session_id'],'assistant','环境缺失，排队任务已停止。',meta={'cancelled':True,'job_id':queued_id})
+                QUEUE.clear()
     finally:
         if proc and proc.poll() is None: proc.kill()
         with LOCK:
@@ -237,13 +251,17 @@ def start_job(p):
     if p['mode']=='image':
         if not model_status()['ready']: raise ValueError('模型还未下载完成。请在“模型设置”中下载或查看进度。')
         for key in ['width','height']:
-            p[key]=int(p.get(key,768))
+            p[key]=int(p.get(key,2048))
             if p[key]<256 or p[key]>2752 or p[key]%32: raise ValueError('图片尺寸须为 256–2752 之间的 32 的倍数。')
         if p['width']*p['height']>4_300_800: raise ValueError('图片总像素暂不超过约 430 万，请选择支持的 2K 尺寸。')
         p['steps']=int(p.get('steps',40))
         if not 1<=p['steps']<=60: raise ValueError('步数须为 1–60。')
         p['seed']=int(p.get('seed',-1))
         if p['seed'] < -1 or p['seed']>2**32-1: raise ValueError('种子须为 -1 或 0–4294967295。')
+        p.setdefault('enhance',True);p.setdefault('ratio_mode','auto')
+        validate_options(p)
+        target='pe-i2i' if refs else 'pe-t2i'
+        if p['enhance'] and not ENHANCERS.status(target)['ready']:raise ValueError('请先下载本次任务所需的提示词增强模型。')
     else:
         if refs: raise ValueError('参考图用于“图像”模式，请先切换模式。')
         with ollama('/api/tags') as r: available=[m['name'] for m in json.load(r)['models']]
@@ -263,7 +281,7 @@ def start_job(p):
         p['prompt']=prompt
         message(p['session_id'],'user',prompt,refs,{'mode':p['mode'],'job_id':jid})
         with connection() as c:
-            c.execute("UPDATE sessions SET title=? WHERE id=? AND title='新会话'",(prompt[:28],p['session_id']))
+            c.execute("UPDATE sessions SET title=? WHERE id=? AND title IN ('新会话','New chat')",(prompt[:28],p['session_id']))
         QUEUE.append((jid,p.copy()))
         advance_queue()
     return job
@@ -283,7 +301,7 @@ class Handler(BaseHTTPRequestHandler):
         path=unquote(urlparse(self.path).path)
         try:
             if path=='/api/status': return self.send_json(status())
-            if path=='/api/health': return self.send_json({'service':'qwen-studio','version':'2.1.0-windows','pid':os.getpid()})
+            if path=='/api/health': return self.send_json({'service':'qwen-studio','version':'2.2.0-windows','pid':os.getpid()})
             if path=='/api/preferences': return self.send_json(preferences())
             if path=='/api/sessions':
                 with connection() as c: return self.send_json([dict(x) for x in c.execute('SELECT * FROM sessions ORDER BY updated DESC')])
@@ -305,10 +323,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not f.is_relative_to((ROOT/'web').resolve()): raise ValueError('Invalid path')
             if not f.is_file(): return self.send_json({'error':'Not found'},404)
             raw=f.read_bytes()
-            if f.name=='index.html': raw=raw.replace(b'__STUDIO_TOKEN__',TOKEN.encode())
+            if f.name=='index.html': raw=raw.replace(b'__STUDIO_TOKEN__',TOKEN.encode()).replace(b'__STUDIO_LANGUAGE__',preferences()['interface_language'].encode())
             self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(str(f))[0] or 'application/octet-stream');self.send_header('Content-Length',str(len(raw)));self.send_header('X-Content-Type-Options','nosniff');self.send_header('Cache-Control','no-store');self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: blob:; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'");self.end_headers();self.wfile.write(raw)
-        except (ValueError,KeyError) as e: self.send_json({'error':str(e)},400)
-        except Exception as e: self.send_json({'error':str(e)},500)
+        except (ValueError,KeyError) as e: self.send_json({'error':str(e),'environment_error':is_environment_error(e)},400)
+        except Exception as e: self.send_json({'error':str(e),'environment_error':is_environment_error(e)},500)
     def do_POST(self):
         global DOWNLOAD
         if not self.authorized(): return self.send_json({'error':'Unauthorized'},403)
@@ -322,11 +340,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path=='/api/preferences':
                 with LOCK:
-                    if 'download_source' in p and model_status()['downloading']: raise ValueError('下载进行中，完成或中断后可更改下载源。')
+                    if 'download_source' in p and (model_status()['downloading'] or any(ENHANCERS.status(key)['downloading'] for key in TARGETS)): raise ValueError('下载进行中，完成或中断后可更改下载源。')
                     return self.send_json(preferences(p))
             if path=='/api/sessions':
                 sid=uuid.uuid4().hex
-                with connection() as c: c.execute('INSERT INTO sessions VALUES(?,?,?,?)',(sid,'新会话',time.time(),time.time()))
+                with connection() as c: c.execute('INSERT INTO sessions VALUES(?,?,?,?)',(sid,'New chat' if self.headers.get('X-Studio-Language')=='en' else '新会话',time.time(),time.time()))
                 return self.send_json(read_session(sid))
             if path=='/api/session/delete':
                 with LOCK:
@@ -347,7 +365,7 @@ class Handler(BaseHTTPRequestHandler):
                 im=Image.open(io.BytesIO(raw))
                 if im.width*im.height>25_000_000: raise ValueError('图片请限制在 2500 万像素以内。')
                 im.load();im=ImageOps.exif_transpose(im)
-                im.thumbnail((2048,2048));im=im.convert('RGBA' if 'A' in im.getbands() else 'RGB')
+                im=im.convert('RGBA' if 'A' in im.getbands() or 'transparency' in im.info else 'RGB')
                 name=uuid.uuid4().hex+'.png';im.save(DATA/'images'/name)
                 return self.send_json({'image':name})
             if path=='/api/generate': return self.send_json(start_job(p))
@@ -356,6 +374,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({'ok':True})
             if path=='/api/model/download':
                 with LOCK:
+                    target=p.get('target','image')
+                    if target!='image':
+                        source=validate_source(p.get('source') or preferences()['download_source'])
+                        current=ENHANCERS.start(target,source)
+                        preferences({'download_source':source})
+                        return self.send_json(current)
                     current=model_status()
                     if current['ready']: return self.send_json(current)
                     source=validate_source(p.get('source') or preferences()['download_source'])
@@ -370,8 +394,8 @@ class Handler(BaseHTTPRequestHandler):
                         log.close()
                 return self.send_json(model_status())
             return self.send_json({'error':'Not found'},404)
-        except (ValueError,KeyError,TypeError) as e: self.send_json({'error':str(e)},400)
-        except Exception as e: self.send_json({'error':str(e)},500)
+        except (ValueError,KeyError,TypeError) as e: self.send_json({'error':str(e),'environment_error':is_environment_error(e)},400)
+        except Exception as e: self.send_json({'error':str(e),'environment_error':is_environment_error(e)},500)
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--port',type=int,default=0);args=parser.parse_args()
@@ -385,6 +409,7 @@ if __name__=='__main__':
             if ACTIVE: JOBS[ACTIVE]['cancel']=True
         if DOWNLOAD and DOWNLOAD.poll() is None:
             DOWNLOAD.terminate()
+        ENHANCERS.stop()
         threading.Thread(target=server.shutdown,daemon=True).start()
     signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
     server.serve_forever()

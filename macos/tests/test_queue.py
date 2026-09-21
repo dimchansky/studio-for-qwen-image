@@ -16,7 +16,7 @@ class QueueTest(unittest.TestCase):
     job['state']='done'
     with s.LOCK:s.ACTIVE=None;s.advance_queue()
    s.run_job=worker
-   def submit(text):return s.start_job(dict(session_id='s',prompt=text,mode='image',width=512,height=512))
+   def submit(text):return s.start_job(dict(session_id='s',prompt=text,mode='image',width=512,height=512,enhance=False))
    first=submit('first');second=submit('second');third=submit('third')
    self.assertEqual(first['state'],'running');self.assertEqual(second['state'],'queued')
    self.assertEqual(len(entered),1);self.assertEqual(len(s.read_session('s')['messages']),3)

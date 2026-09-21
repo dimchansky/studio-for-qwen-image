@@ -1,0 +1,106 @@
+[
+  {
+    "path": "LICENSE",
+    "size": 7831,
+    "sha256": "8dc973f024ff95966bea25866efa443fd16776dcb1001e681e3d467ea572b28d",
+    "revision": "3bef0de9171fa184ec783bd878c25f1a4df6d30b",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "chat_template.jinja",
+    "size": 7756,
+    "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+    "revision": "2e013ba188cc6742c53ad5ea06ab14fb60e848d1",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "config.json",
+    "size": 2808,
+    "sha256": "9ec8ded376ee90bc4cf86ea1459efc90e704b16c4461c17e232b03857132db49",
+    "revision": "1906720ed4eef01009dc92233b63591341802a41",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "generation_config.json",
+    "size": 178,
+    "sha256": "2d92457211a50894a21ea309b73c86db69672350709c864e32744ca377a3e503",
+    "revision": "88af83f3860eab3f8b7db4bbffb67adc7c8f7d42",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "model-00001.safetensors",
+    "size": 5074583064,
+    "sha256": "e8af5c5a8df58bbd30f01e61d555f03a937e1083dcd1fd8fdedfe7adea8b2245",
+    "revision": "b6112f3b747886751c0eb41c4e8c55f6723e494e",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "model-00002.safetensors",
+    "size": 5089028664,
+    "sha256": "1e9d25e9548c226eee3ea259eb3716ed48229dab41fda1676881d34a8ab94dac",
+    "revision": "c28634e9b4563565994f11f5f95534ba5c7bdf8a",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "model-00003.safetensors",
+    "size": 5089028760,
+    "sha256": "01937bc79db056bcb277f9524fcc853e1757a199cd4fa604b342f9a6c8601470",
+    "revision": "920f23aebed3373091a5326b314b70a0b3f2c95e",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "model-00004.safetensors",
+    "size": 3567080680,
+    "sha256": "4354c647339ab93206b9891f16056d7557637013074f4ed021a26beab869fbc3",
+    "revision": "0d34b975500c4682b32e88abf7b4916a85eea287",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "model.safetensors.index.json",
+    "size": 62376,
+    "sha256": "cd170bbfe328839bbec7c241dd2e3179a206c6e6c48c00348b6000e322f53d25",
+    "revision": "f0bc13e2aaa580888d4ca83a9d8b01df3a2f99b9",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "processor_config.json",
+    "size": 1298,
+    "sha256": "e612ca25e93af6072f0c3f6dec5913b8a1326332503ca66d7b4c9ef8336c4b38",
+    "revision": "8522b05862f76077af335145c326b3b9e0ae486c",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "system_prompt.txt",
+    "size": 18344,
+    "sha256": "e378fea686a1431581ba4c654d332ae96adad633f144ae738ec8ce9c4fd66439",
+    "revision": "21740baf51075bdb6c6e0a1208ae5853038a5a25",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "tokenizer.json",
+    "size": 19989343,
+    "sha256": "87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4",
+    "revision": "a1971921c3644221fb5913ebff12c34d5c0143f1",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  },
+  {
+    "path": "tokenizer_config.json",
+    "size": 1166,
+    "sha256": "b0130c1a11528a8a2d6a079d51a38ca357d4100e97ee3d4c02da034771e85430",
+    "revision": "e922a5c99b0828f439545a8a9288c895b50e6437",
+    "hf_revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+    "repo": "Qwen/Qwen-Image-2.1-PE-I2I"
+  }
+]

@@ -6,14 +6,15 @@
 
 Download the Windows x64 or Mac arm64 ZIP from [GitHub Releases](https://github.com/rigorhormist/QwenStudio/releases/latest) and extract the entire archive into a writable directory. Keep the Windows EXE with its accompanying folders. Source archives require a local build; platform ZIPs include the compiled desktop application.
 
-Setup has three stages: download the desktop app, install Python dependencies, then download weights inside the app. The model files occupy about 33.1 GB. Chunk assembly temporarily uses extra space. Reserving at least 80 GB is a practical starting point for installation; saved images require additional space.
+Setup has three stages: download the desktop app, install Python dependencies, then download weights inside the app. Image weights occupy about 33.1 GB and both enhancers add about 37.7 GB. Chunk assembly temporarily uses extra space. Reserve at least 120 GB for a full installation; saved images require additional space.
 
 ## Windows
 
-1. Install [64-bit Python](https://www.python.org/downloads/windows/), version 3.10–3.13. Python 3.11 with Python Launcher is recommended.
-2. Install an appropriate NVIDIA driver and the [WebView2 Evergreen Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/).
-3. Extract the Windows ZIP and run `setup.cmd`. It creates `.venv` in the application directory, installs PyTorch from the official CUDA 13.0 index, then installs other dependencies.
-4. Run `start.cmd`. Before generating an image, open model settings, click the download button and choose a source.
+1. Extract the entire Windows ZIP and open `start.cmd` or `app/Qwen Studio.exe`. No setup script is required before opening the app.
+2. Follow the environment check. If WebView2 is missing, its native fallback screen provides a download link and a retry button.
+3. If needed, use Download Python to install 64-bit Python 3.10–3.13 (3.11 with Python Launcher is recommended). Select Install or repair dependencies. The app installs PyTorch and other dependencies into its own `.venv` and shows the installation log.
+4. Select Open Qwen Studio when all required checks pass. If the GPU check fails, install or update the NVIDIA driver and check again.
+5. Open Settings, select Download model and choose a source before generating an image.
 
 The setup wrapper uses `ExecutionPolicy Bypass` for that PowerShell process only. It does not change the system execution policy. The release package includes the .NET 10 runtime; an SDK is unnecessary for normal use.
 
@@ -33,11 +34,10 @@ Refer to [PyTorch installation instructions](https://pytorch.org/get-started/pre
 
 ## Mac
 
-1. Use an Apple Silicon Mac with macOS 14 or later.
-2. Install the universal2 build of [Python 3.11](https://www.python.org/downloads/macos/). Native arm64 Python 3.10, 3.12 and 3.13 are also supported by the setup script.
-3. Extract the Mac ZIP and run `setup.command`. Dependencies go into `~/Library/Application Support/Qwen Studio/runtime`.
-4. Open `Qwen Studio.app`, or move it into Applications first.
-5. Choose ModelScope or Hugging Face in model settings and start the download.
+1. On an Apple Silicon Mac with macOS 14 or later, extract the ZIP and open `Qwen Studio.app`. You can move it to Applications first.
+2. The environment screen checks each component. If Python is missing, use Download Python to install the python.org Python 3.11 universal2 build. Native arm64 Python 3.10–3.13 is supported.
+3. Select Install or repair dependencies. Dependencies go into `~/Library/Application Support/Qwen Studio/runtime`; checks run again after installation.
+4. Select Open Qwen Studio when all required checks pass, then choose a model download source in Settings.
 
 The App has an ad-hoc signature and is not Apple-notarized. If macOS cannot verify the developer, check the source and SHA-256 checksum first, then use the opening option offered in Privacy & Security. There is no need to disable system security checks.
 
@@ -48,6 +48,16 @@ QWEN_STUDIO_PYTHON_BOOTSTRAP=/path/to/python3 ./setup.command
 ```
 
 The download includes a compiled App. Xcode Command Line Tools are only needed when building from source.
+
+## In-app environment checks
+
+Checks cover the OS, desktop display runtime, writable storage, Python, package imports and compatibility, the Qwen pipeline API, a tiny GPU operation and the downloader. Each passing item shows 🎉. Checks do not download weights, load the image model or generate images. Passing does not guarantee enough GPU memory for every image size.
+
+First use requires selecting Open Qwen Studio. Later launches check again and enter automatically when ready. Missing dependencies or a stopped local service return to the check screen. Use Settings → Environment check to run checks manually after stopping active and queued work. If a task discovers a missing dependency, queued work stops; prompts and task results remain in their chats.
+
+Ollama is optional and does not block image generation. Download image weights after entering the app. Installer diagnostics retain their original text; application explanations and controls support both languages.
+
+Advanced users can still run `setup.cmd` / `setup.command`. Windows defaults to CUDA 13.0. Use the command above for CUDA 12.8; repairs preserve a recognized existing CUDA branch.
 
 ## Model downloads and resuming
 
@@ -78,7 +88,7 @@ Existing weights must be a complete Diffusers directory matching the file manife
 
 ## Updates and removal
 
-Close the app before updating and keep the data directory. On Windows, replace application files while preserving `.venv` and `settings.local.json`; rerun `setup.cmd` when dependencies change. On Mac, replace the App and follow release notes about rerunning `setup.command`.
+Close the app before updating and keep the data directory. On Windows, replace application files while preserving `.venv` and `settings.local.json`; follow the in-app repair prompt for missing dependencies. On Mac, replace the App and let it check the environment. Manual checks are also available in Settings.
 
 Removing the application does not erase saved conversations or models. Back up images before deleting the data directory yourself. Mac Python dependencies also live there. Deleting a conversation removes its messages but leaves generated image files on disk.
 
@@ -88,12 +98,12 @@ Each release includes `SHA256SUMS.txt`. From the download directory:
 
 ```sh
 # Mac
-shasum -a 256 QwenStudio-2.1.0-macos-arm64.zip
+shasum -a 256 QwenStudio-2.2.0-macos-arm64.zip
 ```
 
 ```powershell
 # Windows
-Get-FileHash .\QwenStudio-2.1.0-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\QwenStudio-2.2.0-windows-x64.zip -Algorithm SHA256
 ```
 
 Compare the complete hash with the release checksum file. See the [Usage guide](usage.en.md) for troubleshooting.

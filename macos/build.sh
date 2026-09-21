@@ -9,6 +9,7 @@ for component in backend web; do
   mkdir -p "$app/Contents/Resources/$component"
   rsync -a --delete --exclude '__pycache__' --exclude '*.pyc' --exclude '._*' "$component/" "$app/Contents/Resources/$component/"
 done
+cp setup.command requirements.txt "$app/Contents/Resources/"
 cp assets/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 cat > "$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>
@@ -16,8 +17,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>io.github.qwenstudio</string>
 <key>CFBundleName</key><string>Qwen Studio</string>
 <key>CFBundleDisplayName</key><string>Qwen Studio</string>
-<key>CFBundleVersion</key><string>210</string>
-<key>CFBundleShortVersionString</key><string>2.1.0</string>
+<key>CFBundleVersion</key><string>220</string>
+<key>CFBundleShortVersionString</key><string>2.2.0</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
@@ -26,4 +27,4 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 </dict></plist>
 PLIST
 codesign --force --sign - "$app"
-echo "Built $app. Run setup.command once before launching."
+echo "Built $app. Open the app to check and prepare the environment."

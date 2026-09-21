@@ -18,15 +18,18 @@ Qwen Studio 是为解决 Ollama 等平台暂不支持 Qwen Image 2.1 情况的�
 
 | 平台 | 下载包 | 首次使用 |
 | --- | --- | --- |
-| Windows x64 | [QwenStudio-2.1.0-windows-x64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.1.0/QwenStudio-2.1.0-windows-x64.zip) | 解压，运行 `setup.cmd`，完成后运行 `start.cmd` |
-| Mac Apple Silicon | [QwenStudio-2.1.0-macos-arm64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.1.0/QwenStudio-2.1.0-macos-arm64.zip) | 解压，运行 `setup.command`，完成后打开 `Qwen Studio.app` |
+| Windows x64 | [QwenStudio-2.2.0-windows-x64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.0/QwenStudio-2.2.0-windows-x64.zip) | 解压，打开 `start.cmd`，按应用内环境检测页完成设置 |
+| Mac Apple Silicon | [QwenStudio-2.2.0-macos-arm64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.0/QwenStudio-2.2.0-macos-arm64.zip) | 解压，打开 `Qwen Studio.app`，按环境检测页完成设置 |
 
 安装包包含桌面程序，**不包含 Python、模型权重和 Ollama**。Windows 包自带 .NET 运行时；Mac 的 Python 依赖安装在应用数据目录中，完成安装后可以将 App 移入“应用程序”。当前发布包没有开发者证书签名或 Apple 公证。
 
-完整步骤、校验方法和更新说明见 [安装与下载](docs/installation.zh-CN.md)。不需要图像模型时，可以先启动 Ollama 使用普通聊天。
+完整步骤、校验方法和更新说明见 [安装与下载](docs/installation.zh-CN.md)。通过环境检测后，可以先启动 Ollama 使用普通聊天，无需先下载图像权重。
 
 ## 可以做什么
 
+- 完整中文、英文与跟随系统，切换语言不改写用户输入或聊天记录。
+- 首次启动及发现依赖缺失时显示环境检测页；通过的项目显示 🎉，必需项通过后进入应用。
+- 在应用中安装或修复 Python 依赖；缺少 Python、WebView2 或显卡驱动时提供对应入口。
 - 输入提示词生成图片，添加参考图继续编辑；支持透明背景请求。
 - 调整图片尺寸、生成步数和随机种子，包括 2K 尺寸选项。
 - 在 Ollama 模型之间切换，并按模型能力调整思考强度。
@@ -44,7 +47,7 @@ Qwen Studio 是为解决 Ollama 等平台暂不支持 Qwen Image 2.1 情况的�
 | Mac | Apple Silicon，macOS 14 或更新；通过 PyTorch MPS 运行 |
 | Windows | Windows 10/11 x64，WebView2 Evergreen Runtime，支持所选 PyTorch CUDA 构建的 NVIDIA 显卡和驱动 |
 | Python | 64 位 Python 3.10–3.13；首次安装脚本优先查找 3.11 |
-| 模型空间 | 当前文件清单约 33.1 GB；分段下载合并、Python 依赖和生成结果还需要额外空间 |
+| 模型空间 | 图像模型约 33.1 GB，两个增强模型各约 18.84 GB；分段下载合并、Python 依赖和生成结果还需要额外空间 |
 | 内存 | 使用 CPU offload；需求随图片尺寸和任务变化，尚未测出通用最低配置 |
 | 普通聊天 | 本机 Ollama，地址 `http://127.0.0.1:11434`，至少已下载一个聊天模型 |
 
@@ -54,7 +57,7 @@ Mac 开发环境为 48 GB 统一内存的 Apple M5 Pro。Windows 桌面已可编
 
 应用使用 [Qwen-Image-2.1 官方模型](https://github.com/QwenLM/Qwen-Image-2.1)，可从 [ModelScope](https://modelscope.cn/models/Qwen/Qwen-Image-2.1) 或 [Hugging Face](https://huggingface.co/Qwen/Qwen-Image-2.1) 下载。两个来源对应同一组固定版本的文件，下载完成后进行 SHA-256 校验。
 
-步数和种子来自 Diffusers 的推理参数。步数控制去噪迭代次数；种子用来复现初始随机噪声。默认采用 40 步，默认尺寸为 768 × 768，以减少本地设备的初始负担。更详细的参数和显存说明见 [使用说明](docs/usage.zh-CN.md)。
+步数和种子来自 Diffusers 的推理参数。步数控制去噪迭代次数；种子用来复现初始随机噪声。默认采用官方推荐的 40 步和 2048 × 2048。提示词增强默认开启，首次使用前需要下载对应的 PE-T2I 或 PE-I2I 模型。更详细的参数和显存说明见 [使用说明](docs/usage.zh-CN.md)。
 
 图像解码使用原始 FP32 VAE 和完整画面解码，避免低精度、分块解码引入的色带和拼接痕迹。生成中的预览也从完整潜空间解码后再缩小。模型本身仍可能生成不符合提示词、文字有误或细节异常的图片。
 
@@ -83,6 +86,10 @@ scripts/     发布打包工具
 ```
 
 贡献流程和检查命令见 [CONTRIBUTING.md](CONTRIBUTING.md)。界面文件在两个平台中保持一致，后端保留各自的进程和 GPU 处理方式。
+
+## 官方生成能力
+
+已接入生图与改图的官方 Prompt Enhancer、七种 2K 比例、参考图比例继承、圈选/涂抹/独立蒙版、精确文案、RGBA、反向提示词和批量生成。增强模型各约 18.84 GB，分别在模型设置中下载。参见[完整配置与文字生成说明](docs/generation.zh-CN.md)，其中也列出了此次检查的范围和未实测的部分。
 
 ## 许可证与致谢
 

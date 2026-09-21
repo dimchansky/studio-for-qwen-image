@@ -22,8 +22,14 @@ internal sealed class StudioTitleBar : Panel
 
     CaptionButton Add(CaptionGlyph glyph,string label,Action action)
     {
-        var button=new CaptionButton(glyph){AccessibleName=label,TabStop=false};
-        button.Click+=(_,_)=>action();Controls.Add(button);tips.SetToolTip(button,label);return button;
+        var button=new CaptionButton(glyph){AccessibleName=owner.T(label),TabStop=false};
+        button.Click+=(_,_)=>action();Controls.Add(button);tips.SetToolTip(button,owner.T(label));return button;
+    }
+    internal void RefreshLanguage()
+    {
+        SetSidebarCollapsed(sidebar.Collapsed);RefreshWindowState();
+        minimize.AccessibleName=owner.T("最小化");close.AccessibleName=owner.T("关闭");
+        tips.SetToolTip(minimize,minimize.AccessibleName);tips.SetToolTip(close,close.AccessibleName);
     }
     int Px(float value)=>(int)Math.Round(value*DeviceDpi/96f);
 
@@ -44,12 +50,12 @@ internal sealed class StudioTitleBar : Panel
     {
         if(maximize==null)return;
         maximize.Glyph=owner.WindowState==FormWindowState.Maximized?CaptionGlyph.Restore:CaptionGlyph.Maximize;
-        maximize.AccessibleName=maximize.Glyph==CaptionGlyph.Restore?"还原":"最大化";
+        maximize.AccessibleName=owner.T(maximize.Glyph==CaptionGlyph.Restore?"还原":"最大化");
         tips.SetToolTip(maximize,maximize.AccessibleName);maximize.Invalidate();
     }
     internal void SetSidebarCollapsed(bool collapsed)
     {
-        sidebar.Collapsed=collapsed;sidebar.AccessibleName=collapsed?"展开侧栏":"收起侧栏";
+        sidebar.Collapsed=collapsed;sidebar.AccessibleName=owner.T(collapsed?"展开侧栏":"收起侧栏");
         tips.SetToolTip(sidebar,sidebar.AccessibleName);sidebar.Invalidate();
     }
     protected override void OnPaint(PaintEventArgs e)

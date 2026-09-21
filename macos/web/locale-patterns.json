@@ -1,0 +1,42 @@
+[
+  [
+    "^模型下载 (\\d+)%$",
+    "Model download $1%"
+  ],
+  [
+    "^预计剩余 (\\d+) 分钟$",
+    "About $1 min remaining"
+  ],
+  [
+    "^预计剩余 (\\d+) 小时 (\\d+) 分钟$",
+    "About $1 h $2 min remaining"
+  ],
+  [
+    "^(\\d+) × (\\d+)　(\\d+) 步　([\\d.]+) 秒$",
+    "$1 × $2　$3 steps　$4 s"
+  ],
+  [
+    "^正在生成 (\\d+)\\s*/\\s*(\\d+)$",
+    "Generating $1/$2"
+  ],
+  [
+    "^连接失败：(.*)$",
+    "Connection failed: $1"
+  ],
+  [
+    "^其他会话：(.*)$",
+    "Another chat: $1"
+  ],
+  [
+    "^等待中 (\\d+)：(.*)$",
+    "Queued $1: $2"
+  ],
+  [
+    "^校验失败，请重试：(.*)$",
+    "Verification failed. Try again: $1"
+  ],
+  [
+    "^内存不足。请关闭其他大型应用，将图片尺寸降至 512，再重试。\\n(.*)$",
+    "Not enough memory. Close large apps and try a 512-pixel image.\\n$1"
+  ]
+]

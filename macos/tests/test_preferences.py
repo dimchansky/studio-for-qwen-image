@@ -14,13 +14,16 @@ with tempfile.TemporaryDirectory() as data:
  p,first=launch()
  try:
   assert request(first)['download_source'] is None
-  assert request(first,{'welcome_language':'en','welcome_cycle':False,'download_source':'huggingface'})=={'welcome_language':'en','welcome_cycle':False,'download_source':'huggingface'}
+  assert request(first,{'welcome_language':'en','welcome_cycle':False,'download_source':'huggingface','interface_language':'en'})=={'welcome_language':'en','welcome_cycle':False,'download_source':'huggingface','interface_language':'en'}
  finally:p.terminate();p.wait(timeout=15)
  p,second=launch()
  try:
   assert first!=second
-  assert request(second)=={'welcome_language':'en','welcome_cycle':False,'download_source':'huggingface'}
-  try:request(second,{'welcome_language':'invalid'})
+  assert request(second)=={'welcome_language':'en','welcome_cycle':False,'download_source':'huggingface','interface_language':'en'}
+  assert Path(data,'ui-language.txt').read_text()=='en'
+  Path(data,'ui-language.txt').write_text('zh')
+  assert request(second)['interface_language']=='zh'
+  try:request(second,{'interface_language':'invalid'})
   except urllib.error.HTTPError as e:assert e.code==400
   else:raise AssertionError('Invalid preference accepted')
   try:request(second,{'download_source':'untrusted'})

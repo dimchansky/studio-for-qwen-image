@@ -10,7 +10,9 @@ try:lock.acquire(timeout=0)
 except Timeout:print('Download already running',flush=True);sys.exit(0)
 (root/'.download.pid').write_text(str(os.getpid()))
 (root/'.download-source').write_text(source)
-files=json.loads(Path(__file__).with_name('model-files.json').read_text())
+target=sys.argv[3] if len(sys.argv)>3 else 'image'
+if target not in ('image','pe-t2i','pe-i2i'):raise ValueError('Unknown model target')
+files=json.loads(Path(__file__).with_name('model-files.json' if target=='image' else target+'-files.json').read_text())
 def digest(p):
  h=hashlib.sha256()
  with p.open('rb') as f:

@@ -5,6 +5,7 @@ The MIT license in this repository covers original application code. Dependencie
 | Component | Use | Upstream license or terms |
 | --- | --- | --- |
 | [Qwen-Image-2.1](https://github.com/QwenLM/Qwen-Image-2.1) | Separately downloaded image model | [Qwen Research License](LICENSE.model.txt), non-commercial restrictions |
+| [PE-T2I](https://huggingface.co/Qwen/Qwen-Image-2.1-PE-T2I) / [PE-I2I](https://huggingface.co/Qwen/Qwen-Image-2.1-PE-I2I) | Separately downloaded official prompt enhancers; original app adapter follows published profiles | Checkpoint license files, downloaded with the weights |
 | [Diffusers](https://github.com/huggingface/diffusers) | Image inference pipeline | Apache-2.0 |
 | [Transformers](https://github.com/huggingface/transformers) | Text encoder | Apache-2.0 |
 | [Accelerate](https://github.com/huggingface/accelerate) | CPU/GPU offload | Apache-2.0 |

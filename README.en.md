@@ -18,15 +18,17 @@ Download the ZIP for your platform from [Releases](https://github.com/rigorhormi
 
 | Platform | Package | First launch |
 | --- | --- | --- |
-| Windows x64 | [QwenStudio-2.1.0-windows-x64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.1.0/QwenStudio-2.1.0-windows-x64.zip) | Extract, run `setup.cmd`, then `start.cmd` |
-| Mac Apple Silicon | [QwenStudio-2.1.0-macos-arm64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.1.0/QwenStudio-2.1.0-macos-arm64.zip) | Extract, run `setup.command`, then open `Qwen Studio.app` |
+| Windows x64 | [QwenStudio-2.2.0-windows-x64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.0/QwenStudio-2.2.0-windows-x64.zip) | Extract, open `start.cmd`, and follow the in-app environment check |
+| Mac Apple Silicon | [QwenStudio-2.2.0-macos-arm64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.0/QwenStudio-2.2.0-macos-arm64.zip) | Extract, open `Qwen Studio.app`, and follow the environment check |
 
 Packages include the desktop application but **exclude Python, model weights and Ollama**. The Windows package includes the .NET runtime. Mac Python dependencies live in the application data directory, so the App can move to Applications after setup. These releases are not developer-signed or Apple-notarized.
 
-See [Installation and downloads](docs/installation.en.md) for prerequisites, checksum verification and updates. You can use Ollama chat before downloading the image model.
+See [Installation and downloads](docs/installation.en.md) for prerequisites, checksum verification and updates. After required environment checks pass, you can use Ollama chat before downloading image weights.
 
 ## Features
 
+- Check the environment before first use and when a required component becomes unavailable. Passed items show 🎉; all required items must pass before entering the app.
+- Install or repair Python dependencies inside the app, with links for missing Python, WebView2 and GPU drivers.
 - Generate images from text and edit reference images, with a transparent-background option.
 - Set image dimensions, inference steps and random seed, including 2K presets.
 - Switch local Ollama models and adjust thinking intensity when the selected model supports it.
@@ -34,7 +36,7 @@ See [Installation and downloads](docs/installation.en.md) for prerequisites, che
 - Queue tasks, view generation previews and stop running jobs.
 - Choose ModelScope or Hugging Face on the first model download, with resumable transfers, live speed and estimated time remaining.
 
-The interface uses white and light-gray surfaces with rounded controls and animated page transitions. Welcome prompts support Chinese, English or the system language. Most other interface labels are currently in Chinese.
+The interface uses white and light-gray surfaces with rounded controls and animated page transitions. The interface supports Chinese, English or the system language across menus, settings, downloads, task status, application errors and environment checks. Language changes leave user input and chat content untouched.
 
 <p align="center"><img src="docs/images/download-source.png" width="460" alt="Choose ModelScope or Hugging Face before downloading"></p>
 
@@ -45,7 +47,7 @@ The interface uses white and light-gray surfaces with rounded controls and anima
 | Mac | Apple Silicon, macOS 14 or later, using PyTorch MPS |
 | Windows | Windows 10/11 x64, WebView2 Evergreen Runtime, an NVIDIA GPU and driver compatible with the chosen PyTorch CUDA build |
 | Python | 64-bit Python 3.10–3.13; setup looks for 3.11 first |
-| Model storage | About 33.1 GB for the current file manifest, plus room for download assembly, Python dependencies and generated images |
+| Model storage | About 33.1 GB for image weights and 18.84 GB per enhancer, plus room for download assembly, Python dependencies and generated images |
 | Memory | CPU offload is enabled. Requirements depend on dimensions and workload; a general minimum has not been established |
 | Text chat | Local Ollama at `http://127.0.0.1:11434` with at least one downloaded chat model |
 
@@ -55,7 +57,7 @@ The Mac development machine has an Apple M5 Pro and 48 GB of unified memory. The
 
 The app runs the [official Qwen-Image-2.1 model](https://github.com/QwenLM/Qwen-Image-2.1), available from [ModelScope](https://modelscope.cn/models/Qwen/Qwen-Image-2.1) and [Hugging Face](https://huggingface.co/Qwen/Qwen-Image-2.1). Both sources resolve to the same pinned file set. The downloader verifies SHA-256 hashes before accepting newly downloaded files.
 
-Steps and seed are Diffusers inference parameters. Steps control the number of denoising iterations; the seed controls the initial random noise. The app defaults to 40 steps and 768 × 768 to reduce the initial memory load. See the [Usage guide](docs/usage.en.md) for controls and limitations.
+Steps and seed are Diffusers inference parameters. Steps control the number of denoising iterations; the seed controls the initial random noise. The app uses the official recommendation of 40 steps and 2048 × 2048. Prompt enhancement is on by default; download the appropriate PE-T2I or PE-I2I checkpoint before first use. See the [Usage guide](docs/usage.en.md) for controls and limitations.
 
 The decoder uses the original FP32 VAE and full-frame decoding to avoid color bands and seams introduced by lower precision or tiled decoding. Intermediate previews are decoded before being resized. The model can still produce incorrect text, unexpected details or images that do not follow the prompt.
 
@@ -86,6 +88,10 @@ scripts/     Release packaging tools
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for checks and contribution instructions. Shared interface files remain identical across platforms; process handling and GPU support are platform-specific.
+
+## Official generation capabilities
+
+The app supports both official prompt enhancers, seven 2K ratios, reference-ratio inheritance, circle/paint annotations and masks, exact lettering, RGBA, negative prompts and multiple images. Download each roughly 18.84 GB enhancer separately in Settings. See the [configuration and lettering guide](docs/generation.en.md) for details and validation limits.
 
 ## License and acknowledgments
 

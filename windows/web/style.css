@@ -131,3 +131,20 @@ textarea:focus-visible{background:transparent}
 .source-choice strong{display:block;font-size:14px;font-weight:500}
 .source-choice small{display:block;font-size:12px;color:#626262;margin-top:5px}
 @media(prefers-reduced-motion:reduce){#task-tray{transition:none}.task-tray-content{transform:none;transition:opacity 80ms ease!important}}
+
+/* Advanced image tools keep the composer quiet and remain reachable on short windows. */
+#options{width:min(510px,calc(100vw - 36px));max-height:calc(100dvh - 80px);overflow-y:auto}
+#options .field{margin:20px 0}#options .setting-row{margin:4px 0}
+#options textarea{min-height:76px;width:100%;padding:12px 14px;background:#f3f3f3;border:0;border-radius:14px;font-size:14px;line-height:1.6;resize:vertical}
+#options .advanced-options{margin:22px 0}summary{cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0}
+#apply-options{margin-top:12px}.enhancer-row{padding:17px 20px;margin:12px 0;background:#f6f6f6;border-radius:18px}
+.enhancer-row strong{font-weight:500;font-size:14px}.enhancer-row progress{margin:8px 0!important}.enhancer-row .text-button{background:white;border-radius:20px}
+.reference-number{position:absolute;left:4px;bottom:3px;padding:1px 4px;background:#ffffffe6;border-radius:6px;font-size:9px;color:#444;pointer-events:none}
+.message-images figure{margin:0;min-width:0}.message-images figure .result-image{max-width:100%}
+.prompt-details{margin-top:14px;max-width:100%;border:0}.prompt-details[open]{background:#f7f7f7;padding:10px 18px;border-radius:18px}.prompt-details .prompt-value{font-size:13px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}.prompt-details .muted{margin-bottom:4px}
+
+#annotation-dialog{width:min(980px,calc(100vw - 40px));max-height:calc(100dvh - 70px);overflow:auto}
+.annotation-tools{display:flex;gap:12px;align-items:center;margin:14px 0}.annotation-tools label{display:flex;align-items:center;gap:10px}
+.annotation-stage{display:flex;justify-content:center;background:#f5f5f5;border-radius:18px;overflow:hidden;padding:8px}
+#annotation-canvas{display:block;max-width:100%;max-height:53dvh;width:auto;height:auto;touch-action:none;cursor:crosshair;border-radius:10px}
+#image-viewer .viewer-toolbar{flex-wrap:wrap}

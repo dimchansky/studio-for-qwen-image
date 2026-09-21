@@ -15,5 +15,5 @@ def validate_source(source):
 def download_url(item, source):
     validate_source(source)
     if source == 'modelscope':
-        return 'https://modelscope.cn/api/v1/models/Qwen/Qwen-Image-2.1/repo?' + urlencode({'Revision': item['revision'], 'FilePath': item['path']})
-    return f'https://huggingface.co/Qwen/Qwen-Image-2.1/resolve/{HF_REVISION}/' + quote(item['path'], safe='/')
+        return 'https://modelscope.cn/api/v1/models/'+item.get('repo','Qwen/Qwen-Image-2.1')+'/repo?' + urlencode({'Revision': item['revision'], 'FilePath': item['path']})
+    return f"https://huggingface.co/{item.get('repo','Qwen/Qwen-Image-2.1')}/resolve/{item.get('hf_revision',HF_REVISION)}/" + quote(item['path'], safe='/')

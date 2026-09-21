@@ -25,7 +25,7 @@ internal static class Program
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int n);
 }
 
-internal sealed class StudioWindow : Form
+internal sealed partial class StudioWindow : Form
 {
     readonly WebView2 web = new() { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.White };
     readonly StudioTitleBar titlebar;
@@ -41,7 +41,8 @@ internal sealed class StudioWindow : Form
     {
         root = FindRoot();
         data = Environment.GetEnvironmentVariable("QWEN_STUDIO_DATA") ?? LocalSetting("data") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"QwenStudio");
-        Directory.CreateDirectory(data);
+        try { Directory.CreateDirectory(data); } catch { /* The bootstrap page reports storage failures. */ }
+        LoadLanguage();
         AutoScaleDimensions = new SizeF(96, 96);
         AutoScaleMode = AutoScaleMode.Dpi;
         Text = "Qwen Studio";
@@ -55,6 +56,7 @@ internal sealed class StudioWindow : Form
         DoubleBuffered = true;
         KeyPreview = true;
         titlebar = new StudioTitleBar(this, async () => await Script("window.studioAction?.('sidebar')"));
+        titlebar.RefreshLanguage();
         Controls.Add(web); Controls.Add(titlebar);
         Resize += (_,_) => {
             var edge=(int)Math.Ceiling(4*DeviceDpi/96f);
@@ -90,63 +92,26 @@ internal sealed class StudioWindow : Form
 
     void Log(string line)
     {
-        lock(logLock) File.AppendAllText(Path.Combine(data,"desktop.log"),DateTime.Now.ToString("s")+" "+line+Environment.NewLine,Encoding.UTF8);
-    }
-
-    async Task Initialize()
-    {
-        try {
-            var environment=await CoreWebView2Environment.CreateAsync(null,Path.Combine(data,"WebView2"));
-            await web.EnsureCoreWebView2Async(environment);
-            web.CoreWebView2.Settings.AreDefaultContextMenusEnabled=false;
-            web.CoreWebView2.Settings.IsStatusBarEnabled=false;
-            web.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled=false;
-            web.CoreWebView2.Settings.IsZoomControlEnabled=false;
-            web.CoreWebView2.NavigateToString("<html><body style='margin:0;background:white;color:#626262;font:14px Segoe UI;display:grid;place-items:center;height:100vh'>正在打开 Qwen Studio…</body></html>");
-            if(!File.Exists(Path.Combine(root,".venv","Scripts","python.exe")))
-                throw new FileNotFoundException("请先运行 setup.cmd 安装 Python 依赖，然后重新打开应用。 Run setup.cmd before opening Qwen Studio.");
-            var start = new ProcessStartInfo(Path.Combine(root,".venv","Scripts","python.exe")) {
-                WorkingDirectory=root,UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8
-            };
-            start.ArgumentList.Add("-X");start.ArgumentList.Add("utf8");start.ArgumentList.Add(Path.Combine(root,"backend","server.py"));
-            var model=Environment.GetEnvironmentVariable("QWEN_STUDIO_MODEL") ?? LocalSetting("model");
-            if(!string.IsNullOrWhiteSpace(model))start.Environment["QWEN_STUDIO_MODEL"]=model;
-            start.Environment["PYTHONUTF8"]="1";start.Environment["PYTHONUNBUFFERED"]="1";
-            start.Environment["QWEN_STUDIO_DATA"]=data;start.Environment["QWEN_STUDIO_TOKEN"]=token;
-            start.Environment["NO_PROXY"]="127.0.0.1,localhost";
-            backend=new Process {StartInfo=start,EnableRaisingEvents=true};
-            backend.ErrorDataReceived+=(_,e)=>{if(e.Data!=null)Log(e.Data);};
-            backend.Start();backend.BeginErrorReadLine();
-            var line=await backend.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(30));
-            if(line==null)throw new Exception("本地服务未能启动。请查看 desktop.log。");
-            using(var info=JsonDocument.Parse(line)){origin="http://127.0.0.1:"+info.RootElement.GetProperty("port").GetInt32();}
-            _ = Task.Run(async () => { while(await backend.StandardOutput.ReadLineAsync() is string output) Log(output); });
-            File.WriteAllText(Path.Combine(data,"desktop-runtime.json"),JsonSerializer.Serialize(new {url=origin,pid=backend.Id,desktop_pid=Environment.ProcessId}),Encoding.UTF8);
-            // Match the Swift WKScriptMessageHandler bridge, so the original web UI stays unchanged.
-            await web.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync("if(location.origin === "+JsonSerializer.Serialize(origin)+") {window.webkit={messageHandlers:{studio:{postMessage:p=>window.chrome.webview.postMessage(p)}}};}");
-            web.CoreWebView2.WebMessageReceived+=Bridge;
-            web.CoreWebView2.NavigationStarting+=(_,e)=>{if(e.Uri!="about:blank"&&!IsLocal(e.Uri)){e.Cancel=true;if(Uri.TryCreate(e.Uri,UriKind.Absolute,out var u)&&u.Scheme=="https")Process.Start(new ProcessStartInfo(e.Uri){UseShellExecute=true});}};
-            web.CoreWebView2.NewWindowRequested+=(_,e)=>{e.Handled=true;if(Uri.TryCreate(e.Uri,UriKind.Absolute,out var u)&&u.Scheme=="https")Process.Start(new ProcessStartInfo(e.Uri){UseShellExecute=true});};
-            web.CoreWebView2.NavigationCompleted+=async(_,e)=>{if(e.IsSuccess&&IsLocal(web.Source?.ToString()??"")){
-                await Script("document.querySelectorAll('kbd').forEach(e=>e.textContent=e.textContent.replace('⌘','Ctrl'));document.querySelector('.composer-foot span').textContent='Ctrl ↵';document.querySelector('#reveal-data').lastChild.textContent='在文件资源管理器中打开';");
-            }};
-            web.Source=new Uri(origin);
-        } catch(Exception error) {Log(error.ToString());MessageBox.Show(this,error.Message,"Qwen Studio 启动失败",MessageBoxButtons.OK,MessageBoxIcon.Error);Close();}
+        lock(logLock) { try { File.AppendAllText(Path.Combine(data,"desktop.log"),DateTime.Now.ToString("s")+" "+line+Environment.NewLine,Encoding.UTF8); } catch { } }
     }
 
     bool IsLocal(string value) => Uri.TryCreate(value,UriKind.Absolute,out var u)&&u.GetLeftPart(UriPartial.Authority)==origin;
     void Bridge(object? sender,CoreWebView2WebMessageReceivedEventArgs e)
     {
-        if(!IsLocal(e.Source))return;
+        var environmentPage=IsEnvironment(e.Source);
+        if(!IsLocal(e.Source)&&!environmentPage)return;
         try {
             using var payload=JsonDocument.Parse(e.WebMessageAsJson);var p=payload.RootElement;var action=p.GetProperty("action").GetString();
+            if(action=="languageChanged") {SaveLanguage(p.GetProperty("language").GetString()??"auto");return;}
+            if(environmentPage){HandleEnvironmentAction(action,p);return;}
+            if(action=="checkEnvironment"){ShowEnvironment(true);return;}
             if(action=="revealData")Process.Start(new ProcessStartInfo(data){UseShellExecute=true});
             if(action=="sidebarState")titlebar.SetSidebarCollapsed(p.GetProperty("collapsed").GetBoolean());
             if(action=="saveImage"){
                 var name=p.GetProperty("name").GetString()??"";
                 if(name!=Path.GetFileName(name)||!name.EndsWith(".png",StringComparison.OrdinalIgnoreCase))return;
                 var source=Path.Combine(data,"images",name);if(!File.Exists(source))return;
-                using var dialog=new SaveFileDialog {Filter="PNG 图片|*.png",FileName="Qwen-"+name[..Math.Min(8,name.Length)]+".png",OverwritePrompt=true};
+                using var dialog=new SaveFileDialog {Title=T("保存图片"),Filter="PNG|*.png",FileName="Qwen-"+name[..Math.Min(8,name.Length)]+".png",OverwritePrompt=true};
                 if(dialog.ShowDialog(this)==DialogResult.OK)File.Copy(source,dialog.FileName,true);
             }
         } catch(Exception error){Log(error.ToString());MessageBox.Show(this,error.Message,"Qwen Studio");}
@@ -157,6 +122,8 @@ internal sealed class StudioWindow : Form
         if(shuttingDown)return;
         e.Cancel=true;shuttingDown=true;
         Enabled=false;
+        lifetime.Cancel();
+        if(environmentProcess is {HasExited:false})environmentProcess.Kill(true);
         try {
             if(backend is {HasExited:false}){
                 using var client=new HttpClient(new HttpClientHandler{UseProxy=false}){Timeout=TimeSpan.FromSeconds(3)};

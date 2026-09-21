@@ -10,6 +10,12 @@ For changes, open a focused pull request explaining the user-visible behavior an
 
 The image pipeline is pinned to a Diffusers commit. Update both requirements files and the model manifest deliberately. Do not silently replace the decoder with lower precision or tiled output to avoid memory errors.
 
+## Localization / 界面翻译
+
+Application-owned copy belongs in `web/locales.json` on both platforms. Dynamic formats belong in `locale-patterns.json`; rebuild `locale-data.js` with `python scripts/build_locales.py`. Keep user messages, model output, chat titles and file paths under `translate="no"`. Raw upstream logs are diagnostic content, not application copy. Native shells share the same catalog.
+
+应用文案统一加入两端 `web/locales.json`，动态模板放在 `locale-patterns.json`。生成词条脚本后运行翻译检查。用户消息、模型回复、会话名称、文件路径不参与翻译；原生外壳与网页共用词条。
+
 ## Local checks
 
 Use a separate environment without model weights:
@@ -20,6 +26,8 @@ python -m unittest discover -s macos/tests -p 'test_*.py' -v
 python -m unittest discover -s windows/tests -p 'test_*.py' -v
 python scripts/check_shared_ui.py
 node --check macos/web/app.js
+node tests/i18n.test.cjs
+python -m unittest discover -s tests -v
 ```
 
 Run Mac tests on macOS/Linux and Windows tests on Windows/macOS/Linux. Tests use isolated temporary data and controlled workers. They do not download weights or verify generated-image quality. Do not run both platform suites in the same Python process because their backend module names overlap.
@@ -45,8 +53,8 @@ On a Mac development machine, a prepared existing virtual environment can be use
 Update versions in the native shells, build scripts, release documents and download links. Build the platform shell, then run:
 
 ```sh
-python scripts/package.py --platform windows --version 2.1.0
-python scripts/package.py --platform macos --version 2.1.0
+python scripts/package.py --platform windows --version 2.2.0
+python scripts/package.py --platform macos --version 2.2.0
 ```
 
 The packager uses an allowlist and excludes models, local configuration, virtual environments and logs. Review archives and their SHA-256 hashes before uploading. The release workflow builds both packages from a version tag and attaches them to a draft GitHub Release. Maintainers review the draft before publishing.

@@ -1,6 +1,7 @@
 """Disposable inference process. Its exit releases all CPU/MPS model allocations."""
-import json, os, secrets, sys, time, traceback
+import json, math, os, secrets, sys, time, traceback
 from pathlib import Path
+from generation_options import diffusion_kwargs
 p=json.loads(Path(sys.argv[1]).read_text());status=Path(p['status_path'])
 def report(**values):
     state.update(values);tmp=status.with_suffix('.tmp');tmp.write_text(json.dumps(state));tmp.replace(status)
@@ -23,11 +24,14 @@ try:
     # The 256px tiled decoder introduces green/purple seams, even on a constant gray field.
     # Decode a complete image to preserve spatial context; never silently fall back to tiled output.
     pipe.vae.disable_tiling()
+    if hasattr(pipe.vae,'disable_slicing'):pipe.vae.disable_slicing()
+    pipe.set_progress_bar_config(disable=True)
     seed=p.get('seed',-1);seed=secrets.randbelow(2**32) if seed<0 else seed
     prompt=p['prompt']
     if p.get('transparent'): prompt='This is an RGBA image with transparency. '+prompt+' The image has alpha channel and the background is transparent.'
     refs=[Image.open(Path(p['data'])/'images'/x).copy() for x in p.get('images',[])]
     latest_prediction={}
+    batch_index=0;count=p.get('count',1)
     def remember_prediction(_module,_args,output):
         latest_prediction['noise']=output[0].detach()[:, -(p['width']//16)*(p['height']//16):]
     preview_hook=pipe.transformer.register_forward_hook(remember_prediction)
@@ -46,10 +50,10 @@ try:
         del decoded,z
         for hook in getattr(_pipe,'_all_hooks',[]):
             if hook.model is _pipe.vae:hook.offload();break
-        report(preview=name,preview_step=index)
+        report(preview=name,preview_step=batch_index*p['steps']+index)
     def step(_pipe,i,t,kwargs):
-        report(stage=f'正在生成 {i+1} / {p["steps"]}',progress=.08+.87*(i+1)/p['steps'])
-        if i+1 in preview_steps and p['steps']>=10:
+        report(stage=f'正在生成 {i+1} / {p["steps"]}',progress=.08+.87*(batch_index+(i+1)/p['steps'])/count)
+        if i+1 in preview_steps and p['steps']>=10 and p.get('cfg',1)==1:
             try:
                 z=kwargs['latents']
                 sigma=_pipe.scheduler.sigmas[i+1].to(z)
@@ -58,12 +62,22 @@ try:
             except Exception: traceback.print_exc()
         return kwargs
     report(stage='正在理解画面',progress=.06,seed=seed)
-    kwargs=dict(prompt=prompt,width=p['width'],height=p['height'],num_inference_steps=p['steps'],generator=torch.Generator('cpu').manual_seed(seed),callback_on_step_end=step,output_resolution=max(p['width'],p['height']))
-    if refs: kwargs['image']=refs if len(refs)>1 else refs[0]
-    result=pipe(**kwargs).images[0]
-    report(stage='正在保存图片',progress=.98)
-    name=p['job_id']+'.png';result.save(Path(p['data'])/'images'/name)
-    report(stage='完成',progress=1,image=name,seed=seed)
+    from PIL.PngImagePlugin import PngInfo
+    images=[];seeds=[]
+    # Reuse loaded weights, but render one image at a time to keep peak memory bounded.
+    for batch_index in range(count):
+        image_seed=(seed+batch_index)%(2**32);seeds.append(image_seed)
+        kwargs=diffusion_kwargs(p,prompt)
+        kwargs.update(generator=torch.Generator('cuda' if device=='cuda' else 'cpu').manual_seed(image_seed),callback_on_step_end=step)
+        if refs:kwargs['image']=refs if len(refs)>1 else refs[0]
+        result=pipe(**kwargs).images[0]
+        report(stage='正在保存图片',progress=.08+.87*(batch_index+1)/count)
+        metadata=PngInfo();metadata.add_text('qwen_studio',json.dumps({**{k:p.get(k) for k in ('width','height','steps','transparent','negative_prompt','cfg')},'prompt':prompt,'seed':image_seed,'decoder':'full-frame-fp32'},ensure_ascii=False))
+        name=p['job_id']+(f'-{batch_index+1}' if count>1 else '')+'.png'
+        result.save(Path(p['data'])/'images'/name,pnginfo=metadata);images.append(name)
+        report(completed_images=list(images),batch_index=batch_index+1,batch_count=count)
+    preview_hook.remove()
+    report(stage='完成',progress=1,image=images[0],images=images,seed=seed,seeds=seeds,effective_prompt=prompt)
 except Exception as e:
     traceback.print_exc()
     error=str(e)
