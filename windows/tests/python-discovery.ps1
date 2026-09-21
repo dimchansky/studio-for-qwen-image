@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $VerbosePreference = 'Continue'
 . (Join-Path $PSScriptRoot '..\find-python.ps1')
 function Assert($Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
-$python = (Get-Command python.exe -CommandType Application).Source
+$python = (Get-Command python.exe -CommandType Application | Select-Object -First 1).Source
 $actual = Test-StudioPython $python
 Assert ($actual -and $actual.compatible) ('The CI Python must be supported: ' + $python + ' / ' + ($actual | ConvertTo-Json -Compress))
 
