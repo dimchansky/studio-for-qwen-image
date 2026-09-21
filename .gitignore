@@ -1,0 +1,29 @@
+# Runtime and user data
+.venv/
+venv/
+runtime/
+__pycache__/
+*.py[cod]
+*.log
+*.sqlite3*
+.env
+.env.*
+settings.local.json
+models/
+*.safetensors
+*.gguf
+*.part
+*.receiving
+*.chunk-*
+# Build products
+bin/
+obj/
+app/
+*.app/
+dist/
+*.zip
+# Local OS/editor files
+.DS_Store
+._*
+.vscode/
+.idea/

@@ -1,0 +1,28 @@
+name: Bug report / 问题反馈
+description: Report a reproducible problem / 反馈可重现的问题
+title: "[Bug] "
+body:
+  - type: input
+    id: version
+    attributes:
+      label: App version / 应用版本
+    validations:
+      required: true
+  - type: textarea
+    id: system
+    attributes:
+      label: OS and hardware / 系统与硬件
+      description: OS version, GPU, RAM/VRAM, Python and PyTorch versions if known.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps and expected result / 重现步骤与预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error or screenshot / 错误或截图
+      description: Remove private prompts, paths and tokens before sharing.

@@ -1,0 +1,71 @@
+"""Disposable inference process. Its exit releases all CPU/MPS model allocations."""
+import json, os, secrets, sys, time, traceback
+from pathlib import Path
+p=json.loads(Path(sys.argv[1]).read_text());status=Path(p['status_path'])
+def report(**values):
+    state.update(values);tmp=status.with_suffix('.tmp');tmp.write_text(json.dumps(state));tmp.replace(status)
+state={}
+try:
+    report(stage='正在加载模型',progress=0.01)
+    import torch
+    from diffusers import QwenImage21Pipeline, AutoencoderKLQwenImage21
+    from PIL import Image
+    device='mps' if torch.backends.mps.is_available() else ('cuda' if torch.cuda.is_available() else 'cpu')
+    if device=='cpu': raise RuntimeError('未检测到 GPU 加速，请检查 PyTorch 环境。')
+    # Load the original FP32 decoder directly; casting BF16 weights back to FP32 cannot recover precision.
+    vae=AutoencoderKLQwenImage21.from_pretrained(p['model_path'],subfolder='vae',torch_dtype=torch.float32,local_files_only=True)
+    pipe=QwenImage21Pipeline.from_pretrained(p['model_path'],vae=vae,torch_dtype=torch.bfloat16,local_files_only=True,low_cpu_mem_usage=True)
+    if device=='mps':
+        from mps_attention import install_mps_attention
+        install_mps_attention(pipe.transformer)
+    # Offload whole components, keeping the 8B encoder and 7B denoiser from occupying GPU memory together.
+    pipe.enable_model_cpu_offload(device=device)
+    # The 256px tiled decoder introduces green/purple seams, even on a constant gray field.
+    # Decode a complete image to preserve spatial context; never silently fall back to tiled output.
+    pipe.vae.disable_tiling()
+    seed=p.get('seed',-1);seed=secrets.randbelow(2**32) if seed<0 else seed
+    prompt=p['prompt']
+    if p.get('transparent'): prompt='This is an RGBA image with transparency. '+prompt+' The image has alpha channel and the background is transparent.'
+    refs=[Image.open(Path(p['data'])/'images'/x).copy() for x in p.get('images',[])]
+    latest_prediction={}
+    def remember_prediction(_module,_args,output):
+        latest_prediction['noise']=output[0].detach()[:, -(p['width']//16)*(p['height']//16):]
+    preview_hook=pipe.transformer.register_forward_hook(remember_prediction)
+    preview_steps={max(1,round(p['steps']*fraction)) for fraction in (.4,.7,.9)}
+    def preview(_pipe,latents,index):
+        z=_pipe._unpack_latents(latents.detach(),p['height'],p['width'],_pipe.vae_scale_factor).float()
+        # Preserve the latent grid: resizing latent channels creates colored artifacts.
+        # Decode first, then resize the resulting image for the lightweight preview.
+        mean=torch.tensor(_pipe.vae.config.latents_mean,device=z.device).view(1,-1,1,1,1)
+        std=torch.tensor(_pipe.vae.config.latents_std,device=z.device).view(1,-1,1,1,1)
+        decoded=_pipe.vae.decode((z*std+mean).to(_pipe.vae.dtype),return_dict=False)[0][:,:,0]
+        im=_pipe.image_processor.postprocess(decoded,output_type='pil')[0]
+        im.thumbnail((384,384),Image.Resampling.LANCZOS)
+        name=p['job_id']+'-preview.png';target=Path(p['data'])/'images'/name;temp=target.with_suffix('.tmp')
+        im.save(temp,format='PNG');temp.replace(target)
+        del decoded,z
+        for hook in getattr(_pipe,'_all_hooks',[]):
+            if hook.model is _pipe.vae:hook.offload();break
+        report(preview=name,preview_step=index)
+    def step(_pipe,i,t,kwargs):
+        report(stage=f'正在生成 {i+1} / {p["steps"]}',progress=.08+.87*(i+1)/p['steps'])
+        if i+1 in preview_steps and p['steps']>=10:
+            try:
+                z=kwargs['latents']
+                sigma=_pipe.scheduler.sigmas[i+1].to(z)
+                # Estimate the clean image from the flow velocity, rather than showing noisy latents.
+                preview(_pipe,z-sigma*latest_prediction['noise'],i+1)
+            except Exception: traceback.print_exc()
+        return kwargs
+    report(stage='正在理解画面',progress=.06,seed=seed)
+    kwargs=dict(prompt=prompt,width=p['width'],height=p['height'],num_inference_steps=p['steps'],generator=torch.Generator('cpu').manual_seed(seed),callback_on_step_end=step,output_resolution=max(p['width'],p['height']))
+    if refs: kwargs['image']=refs if len(refs)>1 else refs[0]
+    result=pipe(**kwargs).images[0]
+    report(stage='正在保存图片',progress=.98)
+    name=p['job_id']+'.png';result.save(Path(p['data'])/'images'/name)
+    report(stage='完成',progress=1,image=name,seed=seed)
+except Exception as e:
+    traceback.print_exc()
+    error=str(e)
+    if 'out of memory' in error.lower(): error='内存不足。请关闭其他大型应用，将图片尺寸降至 512，再重试。\n'+error[:300]
+    report(error=error,stage='生成失败');sys.exit(1)

@@ -1,0 +1,92 @@
+<p align="center"><img src="assets/AppIcon.png" width="112" alt="Qwen Studio 图标"></p>
+
+# Qwen Studio
+
+[English](README.en.md) | 简体中文
+
+Qwen Studio 是为解决 Ollama 等平台暂不支持 Qwen Image 2.1 情况的替代交流平台。
+
+在一个本地桌面窗口里生成图片、修改图片，也可以接入已有的 Ollama 模型讨论创意。图像由 Diffusers 运行 Qwen-Image-2.1，普通聊天交给 Ollama。这个项目是独立社区应用，与 Qwen、Ollama 没有隶属关系。
+
+![Qwen Studio 首页](docs/images/home.png)
+
+*上图为共享界面的截图。Mac 使用 AppKit 和 WKWebView，Windows 使用 WinForms 和 WebView2。*
+
+## 下载与开始使用
+
+前往 [Releases](https://github.com/rigorhormist/QwenStudio/releases/latest) 下载对应平台的 ZIP。首次安装需要联网下载 Python 依赖，模型文件随后在应用中单独下载。
+
+| 平台 | 下载包 | 首次使用 |
+| --- | --- | --- |
+| Windows x64 | [QwenStudio-2.1.0-windows-x64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.1.0/QwenStudio-2.1.0-windows-x64.zip) | 解压，运行 `setup.cmd`，完成后运行 `start.cmd` |
+| Mac Apple Silicon | [QwenStudio-2.1.0-macos-arm64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.1.0/QwenStudio-2.1.0-macos-arm64.zip) | 解压，运行 `setup.command`，完成后打开 `Qwen Studio.app` |
+
+安装包包含桌面程序，**不包含 Python、模型权重和 Ollama**。Windows 包自带 .NET 运行时；Mac 的 Python 依赖安装在应用数据目录中，完成安装后可以将 App 移入“应用程序”。当前发布包没有开发者证书签名或 Apple 公证。
+
+完整步骤、校验方法和更新说明见 [安装与下载](docs/installation.zh-CN.md)。不需要图像模型时，可以先启动 Ollama 使用普通聊天。
+
+## 可以做什么
+
+- 输入提示词生成图片，添加参考图继续编辑；支持透明背景请求。
+- 调整图片尺寸、生成步数和随机种子，包括 2K 尺寸选项。
+- 在 Ollama 模型之间切换，并按模型能力调整思考强度。
+- 保存和搜索会话，浏览图片库，点开原图或另存为 PNG。
+- 排队提交任务，查看生成预览，停止正在执行的任务。
+- 首次下载选择 ModelScope 或 Hugging Face，查看进度、实时速度和预计剩余时间；中断后可继续下载。
+
+页面采用白色与浅灰色的圆润布局，保留折叠、页面切换和引导语动画。首页引导语可选中文、英文或跟随系统；其余界面目前主要为中文。
+
+<p align="center"><img src="docs/images/download-source.png" width="460" alt="首次下载时选择 ModelScope 或 Hugging Face"></p>
+
+## 运行环境
+
+| 项目 | 要求与说明 |
+| --- | --- |
+| Mac | Apple Silicon，macOS 14 或更新；通过 PyTorch MPS 运行 |
+| Windows | Windows 10/11 x64，WebView2 Evergreen Runtime，支持所选 PyTorch CUDA 构建的 NVIDIA 显卡和驱动 |
+| Python | 64 位 Python 3.10–3.13；首次安装脚本优先查找 3.11 |
+| 模型空间 | 当前文件清单约 33.1 GB；分段下载合并、Python 依赖和生成结果还需要额外空间 |
+| 内存 | 使用 CPU offload；需求随图片尺寸和任务变化，尚未测出通用最低配置 |
+| 普通聊天 | 本机 Ollama，地址 `http://127.0.0.1:11434`，至少已下载一个聊天模型 |
+
+Mac 开发环境为 48 GB 统一内存的 Apple M5 Pro。Windows 桌面已可编译；不同 NVIDIA 显卡的显存需求和生成速度仍需实机反馈。2K 选项已接入，不代表每台机器都能完成 2K 生成。遇到内存不足时，先用 512 或 768 尺寸。
+
+## 模型来源与参数
+
+应用使用 [Qwen-Image-2.1 官方模型](https://github.com/QwenLM/Qwen-Image-2.1)，可从 [ModelScope](https://modelscope.cn/models/Qwen/Qwen-Image-2.1) 或 [Hugging Face](https://huggingface.co/Qwen/Qwen-Image-2.1) 下载。两个来源对应同一组固定版本的文件，下载完成后进行 SHA-256 校验。
+
+步数和种子来自 Diffusers 的推理参数。步数控制去噪迭代次数；种子用来复现初始随机噪声。默认采用 40 步，默认尺寸为 768 × 768，以减少本地设备的初始负担。更详细的参数和显存说明见 [使用说明](docs/usage.zh-CN.md)。
+
+图像解码使用原始 FP32 VAE 和完整画面解码，避免低精度、分块解码引入的色带和拼接痕迹。生成中的预览也从完整潜空间解码后再缩小。模型本身仍可能生成不符合提示词、文字有误或细节异常的图片。
+
+## 本地数据
+
+- Mac：`~/Library/Application Support/Qwen Studio`
+- Windows：`%LOCALAPPDATA%\QwenStudio`
+
+会话保存在 SQLite 中，图片放在 `images`，模型默认放在 `models/Qwen-Image-2.1`。Windows 可用 `settings.local.json` 指定其他磁盘；已有配置会保留。应用没有账户系统，也不包含遥测。安装依赖和下载模型会访问相应的软件源；普通聊天连接本机 Ollama。详见 [安全与隐私](SECURITY.md)。
+
+## 从源码构建
+
+```sh
+git clone https://github.com/rigorhormist/QwenStudio.git
+cd QwenStudio
+```
+
+Mac 需要 Xcode Command Line Tools；在 `macos` 目录运行 `./build.sh` 和 `./setup.command`。Windows 需要 .NET 10 SDK；在 `windows` 目录运行 `build.ps1` 和 `setup.cmd`。构建桌面程序不需要下载模型。
+
+```text
+macos/       AppKit 桌面外壳、MPS 后端和界面
+windows/     WinForms 桌面外壳、CUDA 后端和界面
+assets/      项目图标
+docs/        中英文安装、使用和开发文档
+scripts/     发布打包工具
+```
+
+贡献流程和检查命令见 [CONTRIBUTING.md](CONTRIBUTING.md)。界面文件在两个平台中保持一致，后端保留各自的进程和 GPU 处理方式。
+
+## 许可证与致谢
+
+应用自有代码采用 [MIT License](LICENSE)。**模型权重不适用 MIT**，使用 Qwen-Image-2.1 须遵守上游 [Qwen Research License](LICENSE.model.txt)，其中包含非商业使用限制。发布包不分发模型权重。
+
+本项目依赖 Qwen-Image-2.1、Diffusers、PyTorch、Transformers、Ollama 和 Microsoft WebView2。加号菜单的圆形排列与动画参考并改写自 [Ramotion/CircleMenu](https://github.com/Ramotion/circle-menu)，保留其 MIT 声明。详见 [第三方声明](THIRD_PARTY_NOTICES.md)。
