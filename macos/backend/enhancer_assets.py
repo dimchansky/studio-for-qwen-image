@@ -12,7 +12,7 @@ TARGETS={'pe-t2i':'Qwen-Image-2.1-PE-T2I','pe-i2i':'Qwen-Image-2.1-PE-I2I'}
 
 def manifest(target):
     if target not in TARGETS:raise ValueError('未知模型。')
-    return json.loads(Path(__file__).with_name(target+'-files.json').read_text())
+    return json.loads(Path(__file__).with_name(target+'-files.json').read_text(encoding='utf-8'))
 
 def ready(root,target):
     files=manifest(target)
@@ -31,7 +31,7 @@ class EnhancerAssets:
             partial=sum(f.stat().st_size for f in root.rglob('*') if f.is_file() and ('.chunk-' in f.name or f.name.endswith('.part') or f.name.endswith('.receiving')))
             process=self.processes.get(target);running=process is not None and process.poll() is None
             try:
-                candidate=psutil.Process(int((root/'.download.pid').read_text()))
+                candidate=psutil.Process(int((root/'.download.pid').read_text(encoding='utf-8')))
                 running=running or (str(Path(__file__).with_name('download.py')) in candidate.cmdline())
             except (OSError,ValueError,psutil.Error):pass
             current=min(total,done+partial);now=time.monotonic();samples=self.samples.setdefault(target,[]);samples.append((now,current))
@@ -45,9 +45,9 @@ class EnhancerAssets:
             current=self.status(target)
             if current['ready']:return current
             if current['downloading']:
-                if (self.path(target)/'.download-source').read_text().strip()!=source:raise ValueError('已有下载任务正在运行，请勿同时切换下载源。')
+                if (self.path(target)/'.download-source').read_text(encoding='utf-8').strip()!=source:raise ValueError('已有下载任务正在运行，请勿同时切换下载源。')
                 return current
-            root=self.path(target);root.mkdir(parents=True,exist_ok=True);self.samples[target]=[];(root/'.download-source').write_text(source)
+            root=self.path(target);root.mkdir(parents=True,exist_ok=True);self.samples[target]=[];(root/'.download-source').write_text(source, encoding='utf-8')
             with (self.data/(target+'-download.log')).open('a') as log:
                 self.processes[target]=subprocess.Popen([os.sys.executable,'-X','utf8',str(Path(__file__).with_name('download.py')),str(root),source,target],stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             return self.status(target)

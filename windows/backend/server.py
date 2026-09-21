@@ -110,14 +110,14 @@ def ollama(path, body=None, timeout=10):
 
 def model_status():
     manifest=ROOT/'backend/model-files.json'
-    files=json.loads(manifest.read_text())
+    files=json.loads(manifest.read_text(encoding='utf-8'))
     total=sum(x['size'] for x in files)
     done=sum(min((MODEL/x['path']).stat().st_size,x['size']) for x in files if (MODEL/x['path']).is_file())
     partial=sum(x.stat().st_size for x in MODEL.rglob('*') if x.is_file() and (x.name.endswith('.part') or '.chunk-' in x.name or x.name.endswith('.receiving')))
     ready=(MODEL/'.verified').is_file() and all((MODEL/x['path']).is_file() and (MODEL/x['path']).stat().st_size==x['size'] for x in files)
     running=DOWNLOAD is not None and DOWNLOAD.poll() is None
     try:
-        pid=int((MODEL/'.download.pid').read_text())
+        pid=int((MODEL/'.download.pid').read_text(encoding='utf-8'))
         process=psutil.Process(pid)
         running=running or any(str(ROOT/'backend/download.py') == arg for arg in process.cmdline())
     except (OSError,ValueError,psutil.Error): pass
@@ -135,7 +135,7 @@ def model_status():
     eta=(total-current)/speed if speed>1024 and not ready else None
     source=preferences()['download_source']
     if running:
-        try: source=validate_source((MODEL/'.download-source').read_text().strip())
+        try: source=validate_source((MODEL/'.download-source').read_text(encoding='utf-8').strip())
         except (OSError,ValueError): source='modelscope'
     return {'source':source,'sources':SOURCES,'ready':ready,'downloading':running,'bytes':current,'total':total,'speed':speed,'eta':eta,'verifying':current>=total and not ready and running,'path':str(MODEL),'error':error}
 
@@ -170,7 +170,7 @@ def run_job(job, payload):
             messages=[{'role':'system','content':'You are a creative assistant. Reply in the user’s language. Help discuss ideas, compose scenes and write image prompts. You have no image tools. Never claim to have generated or edited images. Explain that the user can switch to Image mode to create them.'}]
             messages += chat_history(sid,job['id'],payload['prompt'])
             inp=DATA/'jobs'/f"{job['id']}.input.json";out=DATA/'jobs'/f"{job['id']}.status.json"
-            inp.write_text(json.dumps({'history':messages,'chat_model':payload['chat_model'],'think':payload.get('think'),'status_path':str(out)}))
+            inp.write_text(json.dumps({'history':messages,'chat_model':payload['chat_model'],'think':payload.get('think'),'status_path':str(out)}), encoding='utf-8')
             with (DATA/'jobs'/f"{job['id']}.log").open('w') as log:
                 proc=subprocess.Popen([sys.executable,'-X','utf8',str(ROOT/'backend/chat_worker.py'),str(inp)],stdout=log,stderr=log,creationflags=CREATE_FLAGS)
                 while proc.poll() is None:
@@ -180,9 +180,9 @@ def run_job(job, payload):
                         except subprocess.TimeoutExpired: proc.kill();proc.wait()
                         raise InterruptedError()
                     if out.exists():
-                        with contextlib.suppress(Exception): job.update(json.loads(out.read_text()))
+                        with contextlib.suppress(Exception): job.update(json.loads(out.read_text(encoding='utf-8')))
                     time.sleep(.2)
-            if out.exists(): job.update(json.loads(out.read_text()))
+            if out.exists(): job.update(json.loads(out.read_text(encoding='utf-8')))
             if proc.returncode!=0: raise RuntimeError(job.get('error') or '聊天进程退出，请重试。')
             message(sid,'assistant',job['text'],meta={'job_id':job['id'],'mode':'chat','model':payload['chat_model'],'think':payload.get('think')})
         else:
@@ -388,7 +388,7 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         preferences({'download_source':source})
                         DOWNLOAD_SAMPLES.clear()
-                        (MODEL/'.download-source').write_text(source)
+                        (MODEL/'.download-source').write_text(source, encoding='utf-8')
                         log=(DATA/'download.log').open('a')
                         DOWNLOAD=subprocess.Popen([sys.executable,'-X','utf8',str(ROOT/'backend/download.py'),str(MODEL),source],stdout=log,stderr=log,creationflags=CREATE_FLAGS)
                         log.close()

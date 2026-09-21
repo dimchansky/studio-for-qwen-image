@@ -2,9 +2,9 @@
 import json, math, os, secrets, sys, time, traceback
 from pathlib import Path
 from generation_options import diffusion_kwargs
-p=json.loads(Path(sys.argv[1]).read_text());status=Path(p['status_path'])
+p=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'));status=Path(p['status_path'])
 def report(**values):
-    state.update(values);tmp=status.with_suffix('.tmp');tmp.write_text(json.dumps(state));tmp.replace(status)
+    state.update(values);tmp=status.with_suffix('.tmp');tmp.write_text(json.dumps(state), encoding='utf-8');tmp.replace(status)
 state={}
 try:
     report(stage='正在加载模型',progress=0.01)

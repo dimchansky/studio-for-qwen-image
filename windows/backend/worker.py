@@ -3,7 +3,7 @@ import json, math, os, secrets, sys, time, traceback
 from pathlib import Path
 from generation_options import diffusion_kwargs
 from io_utils import atomic_json, replace_with_retry
-p=json.loads(Path(sys.argv[1]).read_text());status=Path(p['status_path'])
+p=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'));status=Path(p['status_path'])
 def report(**values):
     state.update(values);atomic_json(status,state)
 state={}

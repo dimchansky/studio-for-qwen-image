@@ -113,7 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func run(_ executable:String,_ arguments:[String],timeout:Double,onLine:@escaping(String)->Void) -> Int32 {
         let process=Process();process.executableURL=URL(fileURLWithPath:executable);process.arguments=arguments
         process.currentDirectoryURL=resources
-        var env=ProcessInfo.processInfo.environment;env["QWEN_STUDIO_DATA"]=dataURL.path;env["PYTHONUNBUFFERED"]="1";env["PYTHONUTF8"]="1";env["PIP_NO_INPUT"]="1"
+        var env=ProcessInfo.processInfo.environment;env["QWEN_STUDIO_DATA"]=dataURL.path;env["PYTHONUNBUFFERED"]="1";env["PYTHONUTF8"]="1";env["PYTHONDONTWRITEBYTECODE"]="1";env["PIP_NO_INPUT"]="1"
         process.environment=env
         let pipe=Pipe();process.standardOutput=pipe;process.standardError=pipe
         DispatchQueue.main.sync { self.environmentProcess=process }
@@ -183,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         if backend?.isRunning == true && backendPort>0 {enterStudio();return}
         environmentBusy=true;sendEnvironment(["busy":true,"message":"正在启动本地服务…"])
         let process=Process();process.executableURL=URL(fileURLWithPath:python);process.arguments=[resources.appendingPathComponent("backend/server.py").path];process.currentDirectoryURL=resources
-        var env=ProcessInfo.processInfo.environment;env["PYTHONUNBUFFERED"]="1";env["QWEN_STUDIO_DATA"]=dataURL.path;process.environment=env
+        var env=ProcessInfo.processInfo.environment;env["PYTHONUNBUFFERED"]="1";env["QWEN_STUDIO_DATA"]=dataURL.path;env["PYTHONUTF8"]="1";env["PYTHONDONTWRITEBYTECODE"]="1";process.environment=env
         let output=Pipe();process.standardOutput=output
         let log=dataURL.appendingPathComponent("app.log");if !FileManager.default.fileExists(atPath:log.path){FileManager.default.createFile(atPath:log.path,contents:nil)}
         let handle=try? FileHandle(forWritingTo:log);handle?.seekToEndOfFile();process.standardError=handle
@@ -194,16 +194,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             if !self.environmentVisible {self.showEnvironment(manual:true)} else {self.check("service","本地服务",false,"本地服务未能启动，请查看详细日志。");self.sendEnvironment(["busy":false,"ready":false,"message":"本地服务未能启动，请查看详细日志。"]) }
         }}
         do{try process.run()}catch{environmentBusy=false;environmentReady=false;check("service","本地服务",false,"本地服务未能启动，请查看详细日志。");sendEnvironment(["busy":false,"ready":false,"log":error.localizedDescription]);return}
+        // Check readiness on the main queue instead of relying on cancellation of a
+        // queued work item: a completed handshake must never terminate the server.
+        DispatchQueue.main.asyncAfter(deadline:.now()+30) { [weak self] in
+            guard let self=self,self.backend === process,self.backendPort==0,process.isRunning else{return}
+            self.sendEnvironment(["log":"Local service startup timed out."])
+            Self.stopTree(process)
+        }
         DispatchQueue.global().async { [weak self] in
-            var buffer=Data()
-            let timeout=DispatchWorkItem {if process.isRunning {Self.stopTree(process)}}
-            DispatchQueue.global().asyncAfter(deadline:.now()+30,execute:timeout)
-            while !buffer.contains(10){let chunk=output.fileHandleForReading.availableData;if chunk.isEmpty{break};buffer.append(chunk)}
-            timeout.cancel()
-            guard let first=String(data:buffer,encoding:.utf8)?.split(separator:"\n").first,let d=String(first).data(using:.utf8),let info=(try? JSONSerialization.jsonObject(with:d)) as? [String:Any],let port=info["port"] as? Int else {Self.stopTree(process);return}
-            DispatchQueue.main.async {guard let self=self else{return};self.backendPort=port;self.environmentBusy=false;self.enterStudio()}
-            // Drain stdout so an unexpectedly chatty backend cannot deadlock.
-            while !output.fileHandleForReading.availableData.isEmpty {}
+            var buffer=Data();var ready=false
+            while true {
+                let chunk=output.fileHandleForReading.availableData
+                if chunk.isEmpty{break};buffer.append(chunk)
+                while let newline=buffer.firstIndex(of:10) {
+                    let line=Data(buffer[..<newline]);buffer.removeSubrange(...newline)
+                    if !ready,let info=(try? JSONSerialization.jsonObject(with:line)) as? [String:Any],let port=info["port"] as? Int,(1...65535).contains(port) {
+                        ready=true
+                        DispatchQueue.main.async {guard let self=self,self.backend === process,process.isRunning else{return};self.backendPort=port;self.environmentBusy=false;self.enterStudio()}
+                    } else if let message=String(data:line,encoding:.utf8),!message.isEmpty {
+                        DispatchQueue.main.async {self?.sendEnvironment(["log":message])}
+                    }
+                }
+            }
+            if !ready {Self.stopTree(process)}
         }
     }
     func enterStudio() {

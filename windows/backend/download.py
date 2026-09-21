@@ -8,11 +8,11 @@ root=Path(sys.argv[1]);root.mkdir(parents=True,exist_ok=True)
 lock=FileLock(str(root/'.download.lock'))
 try:lock.acquire(timeout=0)
 except Timeout:print('Download already running',flush=True);sys.exit(0)
-(root/'.download.pid').write_text(str(os.getpid()))
-(root/'.download-source').write_text(source)
+(root/'.download.pid').write_text(str(os.getpid()), encoding='utf-8')
+(root/'.download-source').write_text(source, encoding='utf-8')
 target=sys.argv[3] if len(sys.argv)>3 else 'image'
 if target not in ('image','pe-t2i','pe-i2i'):raise ValueError('Unknown model target')
-files=json.loads(Path(__file__).with_name('model-files.json' if target=='image' else target+'-files.json').read_text())
+files=json.loads(Path(__file__).with_name('model-files.json' if target=='image' else target+'-files.json').read_text(encoding='utf-8'))
 def digest(p):
  h=hashlib.sha256()
  with p.open('rb') as f:
@@ -67,7 +67,7 @@ try:
   assembled.replace(dest)
   for ch in sources:ch.unlink(missing_ok=True)
   print('Completed',item['path'],flush=True)
- (root/'.verified').write_text(f'{source}: all official model files SHA-256 verified\n')
+ (root/'.verified').write_text(f'{source}: all official model files SHA-256 verified\n', encoding='utf-8')
  print('Model ready',flush=True)
 finally:
  (root/'.download.pid').unlink(missing_ok=True)

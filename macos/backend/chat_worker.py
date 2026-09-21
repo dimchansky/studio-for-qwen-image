@@ -2,9 +2,9 @@
 import json, sys
 from pathlib import Path
 from urllib.request import Request, urlopen
-p=json.loads(Path(sys.argv[1]).read_text());status=Path(p['status_path']);text=''
+p=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'));status=Path(p['status_path']);text=''
 def report(**state):
- tmp=status.with_suffix('.tmp');tmp.write_text(json.dumps(state,ensure_ascii=False));tmp.replace(status)
+ tmp=status.with_suffix('.tmp');tmp.write_text(json.dumps(state,ensure_ascii=False), encoding='utf-8');tmp.replace(status)
 try:
  body={'model':p['chat_model'],'messages':p['history'],'stream':True,'keep_alive':0,'options':{'num_ctx':4096}}
  if p.get('think') is not None:body['think']=p['think']

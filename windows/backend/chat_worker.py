@@ -3,7 +3,7 @@ import json, sys
 from pathlib import Path
 from io_utils import atomic_json
 from urllib.request import Request, build_opener, ProxyHandler
-p=json.loads(Path(sys.argv[1]).read_text());status=Path(p['status_path']);text=''
+p=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'));status=Path(p['status_path']);text=''
 def report(**state):
  atomic_json(status,state)
 try:
