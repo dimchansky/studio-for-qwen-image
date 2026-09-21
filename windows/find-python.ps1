@@ -75,6 +75,17 @@ function Get-StudioPythonCandidates {
             }
         }
     }
+    # Real Store Python packages are separate from the zero-byte App Installer aliases.
+    if (Get-Command Get-AppxPackage -ErrorAction SilentlyContinue) {
+        try {
+            foreach ($package in (Get-AppxPackage -Name 'PythonSoftwareFoundation.Python*' -ErrorAction SilentlyContinue)) {
+                if ($package.InstallLocation) {
+                    Join-Path $package.InstallLocation 'python.exe'
+                    Join-Path $package.InstallLocation 'python3.exe'
+                }
+            }
+        } catch { Write-Verbose $_.Exception.Message }
+    }
     foreach ($directory in $directories) {
         $directory = [Environment]::ExpandEnvironmentVariables($directory.Trim('"'))
         foreach ($name in @('python.exe','python3.exe')) { Join-Path $directory $name }
