@@ -22,9 +22,9 @@ function Invoke-PythonDiscoveryCommand([string]$Executable, [string]$Arguments) 
             $process.Kill()
             return $null
         }
-        if ($process.ExitCode -ne 0) { return $null }
+        if ($process.ExitCode -ne 0) { Write-Verbose ($Executable + ": " + $errorOutput.GetAwaiter().GetResult()); return $null }
         return $output.GetAwaiter().GetResult()
-    } catch { return $null } finally { $process.Dispose() }
+    } catch { Write-Verbose ($Executable + ": " + $_.Exception.Message); return $null } finally { $process.Dispose() }
 }
 
 function Test-StudioPython([string]$Executable) {
@@ -43,7 +43,7 @@ function Test-StudioPython([string]$Executable) {
             virtual = [bool]$result.virtual
             compatible = $result.version[0] -eq 3 -and $result.version[1] -ge 10 -and $result.version[1] -lt 14 -and $result.bits -eq 64
         }
-    } catch { return $null }
+    } catch { Write-Verbose ($Executable + ": " + $_.Exception.Message); return $null }
 }
 
 function Get-StudioPythonCandidates {

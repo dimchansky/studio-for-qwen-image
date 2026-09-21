@@ -1,9 +1,10 @@
 $ErrorActionPreference = 'Stop'
+$VerbosePreference = 'Continue'
 . (Join-Path $PSScriptRoot '..\find-python.ps1')
 function Assert($Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 $python = (Get-Command python.exe -CommandType Application).Source
 $actual = Test-StudioPython $python
-Assert ($actual -and $actual.compatible) 'The CI Python must be supported.'
+Assert ($actual -and $actual.compatible) ('The CI Python must be supported: ' + $python + ' / ' + ($actual | ConvertTo-Json -Compress))
 
 $temp = Join-Path ([IO.Path]::GetTempPath()) ('Qwen discovery ' + [Guid]::NewGuid())
 $registry = 'HKCU:\Software\Python\QwenStudioDiscoveryTest-' + [Guid]::NewGuid()
