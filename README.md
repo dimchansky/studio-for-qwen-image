@@ -18,8 +18,8 @@ Qwen Studio 是为解决 Ollama 等平台暂不支持 Qwen Image 2.1 情况的�
 
 | 平台 | 下载包 | 首次使用 |
 | --- | --- | --- |
-| Windows x64 | [QwenStudio-2.2.0-windows-x64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.0/QwenStudio-2.2.0-windows-x64.zip) | 解压，打开 `start.cmd`，按应用内环境检测页完成设置 |
-| Mac Apple Silicon | [QwenStudio-2.2.0-macos-arm64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.0/QwenStudio-2.2.0-macos-arm64.zip) | 解压，打开 `Qwen Studio.app`，按环境检测页完成设置 |
+| Windows x64 | [QwenStudio-2.2.1-windows-x64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.1/QwenStudio-2.2.1-windows-x64.zip) | 解压，打开 `start.cmd`，按应用内环境检测页完成设置 |
+| Mac Apple Silicon | [QwenStudio-2.2.1-macos-arm64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.1/QwenStudio-2.2.1-macos-arm64.zip) | 解压，打开 `Qwen Studio.app`，按环境检测页完成设置 |
 
 安装包包含桌面程序，**不包含 Python、模型权重和 Ollama**。Windows 包自带 .NET 运行时；Mac 的 Python 依赖安装在应用数据目录中，完成安装后可以将 App 移入“应用程序”。当前发布包没有开发者证书签名或 Apple 公证。
 

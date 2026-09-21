@@ -11,7 +11,7 @@ COMMON = ('README.md', 'README.en.md', 'LICENSE', 'LICENSE.model.txt', 'NOTICE',
           'docs', 'licenses', 'assets')
 ALLOWED = {
     'windows': ('app', 'backend', 'web', 'desktop', 'assets', 'requirements.txt',
-                'setup.cmd', 'setup.ps1', 'start.cmd', 'start.ps1', 'build.ps1', 'settings.example.json'),
+                'setup.cmd', 'setup.ps1', 'find-python.ps1', 'start.cmd', 'start.ps1', 'build.ps1', 'settings.example.json'),
     'macos': ('Qwen Studio.app', 'backend', 'web', 'native', 'assets', 'requirements.txt',
               'setup.command', 'build.sh'),
 }

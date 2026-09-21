@@ -18,6 +18,8 @@ Setup has three stages: download the desktop app, install Python dependencies, t
 
 The setup wrapper uses `ExecutionPolicy Bypass` for that PowerShell process only. It does not change the system execution policy. The release package includes the .NET 10 runtime; an SDK is unnecessary for normal use.
 
+Python discovery prefers the existing app `.venv`, then checks Python Launcher, registered installations and current/user/system PATH. The check shows the selected interpreter path. If Python is installed but PyTorch or Diffusers is missing, repair those dependencies without reinstalling Python. A system environment that passes every check can be used directly; repairs install dependencies into the app environment. A previously configured folder on an external drive may already contain that environment. Fresh ZIP downloads exclude `.venv` and need dependency setup in their new directory.
+
 For a CUDA 12.8 driver environment:
 
 ```powershell

@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         for (title,action,key) in [("撤销","undo:","z"),("剪切","cut:","x"),("复制","copy:","c"),("粘贴","paste:","v"),("全选","selectAll:","a")] { edit.addItem(withTitle:t(title),action:Selector(action),keyEquivalent:key) }
         NSApp.mainMenu=menu
     }
-    @objc func about() { let a=NSAlert();a.messageText="Qwen Studio";a.informativeText=t("本地图像与对话工作室")+"\nQwen-Image-2.1 / Diffusers / Ollama\n"+t("版本")+" 2.2.0";a.addButton(withTitle:t("确定"));a.runModal() }
+    @objc func about() { let a=NSAlert();a.messageText="Qwen Studio";a.informativeText=t("本地图像与对话工作室")+"\nQwen-Image-2.1 / Diffusers / Ollama\n"+t("版本")+" 2.2.1";a.addButton(withTitle:t("确定"));a.runModal() }
     @objc func settings(){web.evaluateJavaScript("window.studioAction?.('settings')")}
     @objc func newSession(){web.evaluateJavaScript("window.studioAction?.('new')")}
     @objc func toggleSidebar(){web.evaluateJavaScript("window.studioAction?.('sidebar')")}

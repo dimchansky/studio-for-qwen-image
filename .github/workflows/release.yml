@@ -40,6 +40,9 @@ jobs:
       - run: node --check macos/web/annotation.js
       - run: node --check macos/web/environment.js
       - run: node --check macos/web/i18n.js
+      - run: ./windows/tests/python-discovery.ps1
+        if: matrix.platform == 'windows'
+        shell: powershell
       - run: ./windows/build.ps1
         if: matrix.platform == 'windows'
         shell: pwsh

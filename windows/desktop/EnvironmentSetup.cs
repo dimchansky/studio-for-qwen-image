@@ -15,7 +15,8 @@ internal sealed partial class StudioWindow
     string language="auto";
     Panel? fallback;
     const string EnvironmentOrigin="https://studio.local";
-    string Python => Environment.GetEnvironmentVariable("QWEN_STUDIO_PYTHON") ?? Path.Combine(root,".venv","Scripts","python.exe");
+    string? detectedPython;
+    string Python => detectedPython ?? Environment.GetEnvironmentVariable("QWEN_STUDIO_PYTHON") ?? Path.Combine(root,".venv","Scripts","python.exe");
     bool English => language=="en" || (language=="auto"&&!CultureInfo.CurrentUICulture.Name.StartsWith("zh",StringComparison.OrdinalIgnoreCase));
     internal string T(string text) => English?translations.GetValueOrDefault(text,text):text;
     record CheckItem(string id,string title,string state,string detail,bool required=true,string? diagnostic=null);
@@ -109,6 +110,26 @@ internal sealed partial class StudioWindow
             return process.ExitCode;
         }finally{environmentProcess=null;}
     }
+    async Task<bool> FindPython()
+    {
+        detectedPython=null;
+        await Put(new("python","Python 运行环境","checking","正在查找已安装的 Python…"));
+        JsonElement result=default;
+        var code=await Run("powershell.exe",["-NoProfile","-ExecutionPolicy","Bypass","-File",Path.Combine(root,"find-python.ps1"),"-AsJson"],90,line=>{
+            try{using var document=JsonDocument.Parse(line);if(document.RootElement.TryGetProperty("found",out _))result=document.RootElement.Clone();}
+            catch{_ = SendEnvironment(new{log=line});}
+        });
+        if(code==0&&result.ValueKind==JsonValueKind.Object&&result.GetProperty("found").GetBoolean()){
+            detectedPython=result.GetProperty("python").GetProperty("executable").GetString();
+            if(!string.IsNullOrWhiteSpace(detectedPython)&&File.Exists(detectedPython))return true;
+        }
+        var incompatible=result.ValueKind==JsonValueKind.Object&&result.TryGetProperty("rejected",out var rejected)&&rejected.GetArrayLength()>0;
+        var detail=incompatible?"已找到 Python，但版本或架构不兼容。需要 64 位 Python 3.10–3.13。":
+            !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("QWEN_STUDIO_PYTHON"))?"指定的 Python 环境不可用，请检查 QWEN_STUDIO_PYTHON。":
+            code!=0?"Python 查找未能完成，请查看详细日志。":"未找到可用的 Python。安装 64 位 Python 3.10–3.13 后重新检测。";
+        await Put(new("python","Python 运行环境","fail",detail,diagnostic:result.ValueKind==JsonValueKind.Object?result.GetRawText():null));
+        return false;
+    }
     async Task CheckEnvironment()
     {
         if(environmentBusy)return;environmentBusy=true;environmentReady=false;checks.Clear();
@@ -119,14 +140,13 @@ internal sealed partial class StudioWindow
         try{Directory.CreateDirectory(data);var test=Path.Combine(data,".write-check-"+Guid.NewGuid());File.WriteAllText(test,"studio");File.Delete(test);await Put(new("storage","本地存储","pass","可以保存会话与图片"));}
         catch{await Put(new("storage","本地存储","fail","无法写入数据目录，请检查磁盘和权限。"));}
         var complete=false;var exit=-1;
-        if(!File.Exists(Python))await Put(new("python","Python 运行环境","fail","未安装应用运行环境，请安装依赖。"));
-        else {
+        if(await FindPython()) {
             exit=await Run(Python,["-X","utf8",Path.Combine(root,"backend","environment_probe.py"),"--data",data],960,line=>{
                 try{
                     using var json=JsonDocument.Parse(line);var item=json.RootElement;
                     if(item.GetProperty("type").GetString()=="complete")complete=true;
                     else if(item.GetProperty("type").GetString()=="check"){
-                        var check=JsonSerializer.Deserialize<CheckItem>(line)!;checks[check.id]=check;_ = SendEnvironment(new{item=check});
+                        var check=JsonSerializer.Deserialize<CheckItem>(line)!;if(check.id=="python")check=check with {detail=check.detail+"\n"+Python};checks[check.id]=check;_ = SendEnvironment(new{item=check});
                         if(check.diagnostic!=null)_ = SendEnvironment(new{log=check.title+": "+check.diagnostic});
                     }
                 }catch{_ = SendEnvironment(new{log=line});}
@@ -142,6 +162,7 @@ internal sealed partial class StudioWindow
         if(environmentBusy)return;environmentBusy=true;environmentReady=false;manualCheck=true;
         await SendEnvironment(new{busy=true,ready=false,message="正在安装依赖…"});
         var script="[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); & '"+Path.Combine(root,"setup.ps1").Replace("'","''")+"'";
+        if(!string.IsNullOrWhiteSpace(detectedPython))script+=" -Python '"+detectedPython.Replace("'","''")+"'";
         var encoded=Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
         var code=await Run("powershell.exe",["-NoProfile","-ExecutionPolicy","Bypass","-EncodedCommand",encoded],7200,line=>{_ = SendEnvironment(new{log=line});});
         environmentBusy=false;

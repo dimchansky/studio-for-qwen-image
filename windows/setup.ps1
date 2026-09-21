@@ -3,7 +3,9 @@ param(
     [ValidateSet('cu130','cu128')][string]$Cuda = 'cu130'
 )
 $ErrorActionPreference = 'Stop'
+$cudaWasSpecified = $PSBoundParameters.ContainsKey('Cuda')
 Set-Location $PSScriptRoot
+. (Join-Path $PSScriptRoot 'find-python.ps1')
 function Run-Python([string[]]$Arguments) {
     & $script:PythonCommand @script:PythonPrefix @Arguments
     if ($LASTEXITCODE -ne 0) { throw 'Python setup failed. Review the error above and rerun setup.cmd.' }
@@ -13,28 +15,20 @@ if ($env:QWEN_STUDIO_PYTHON) {
     & $runtimePython -c 'import sys; assert sys.prefix != sys.base_prefix, "Custom runtime must be a virtual environment; global Python is not modified."'
     if ($LASTEXITCODE -ne 0) { throw 'Select a working virtual environment or remove QWEN_STUDIO_PYTHON to use the app runtime.' }
 }
-if (-not $Python -and (Test-Path $runtimePython)) {
-    try { & $runtimePython -c 'import sys; assert (3,10)<=sys.version_info[:2]<(3,14)' 2>$null; if ($LASTEXITCODE -eq 0) { $Python=$runtimePython } } catch {}
-}
-if (-not $PSBoundParameters.ContainsKey('Cuda') -and (Test-Path $runtimePython)) {
+if (-not $cudaWasSpecified -and (Test-Path $runtimePython)) {
     try { $existingCuda=& $runtimePython -c 'import torch; print(torch.version.cuda or "")' 2>$null; if ($LASTEXITCODE -eq 0 -and $existingCuda -eq '12.8') { $Cuda='cu128' } } catch {}
 }
-$script:PythonCommand = $Python
-$script:PythonPrefix = @()
-if (-not $Python) {
-    if (Get-Command py -ErrorAction SilentlyContinue) {
-        foreach ($version in @('-3.11','-3.10','-3.12','-3.13')) {
-            & py $version -c 'import sys; assert sys.maxsize > 2**32' 2>$null
-            if ($LASTEXITCODE -eq 0) { $script:PythonCommand='py'; $script:PythonPrefix=@($version); break }
-        }
-    }
-    if (-not $script:PythonCommand -and (Get-Command python -ErrorAction SilentlyContinue)) { $script:PythonCommand='python' }
+$discovery = Find-StudioPython -Preferred @($runtimePython) -Explicit $Python
+if (-not $discovery.found) {
+    if ($discovery.rejected.Count) { throw 'Python was found but is incompatible. Use 64-bit Python 3.10-3.13.' }
+    throw 'No working Python found. Install 64-bit Python 3.10-3.13 and run setup.cmd again.'
 }
-if (-not $script:PythonCommand) { throw 'Install 64-bit Python 3.11 from https://www.python.org/downloads/windows/ and rerun setup.cmd.' }
-Run-Python -Arguments @('-c','import sys; assert (3,10) <= sys.version_info[:2] < (3,14) and sys.maxsize > 2**32, "Use 64-bit Python 3.10-3.13"')
+$script:PythonCommand = $discovery.python.executable
+$script:PythonPrefix = @()
 $runtimeReady=$false
 if (Test-Path $runtimePython) {
-    try { & $runtimePython -c 'import sys; assert (3,10)<=sys.version_info[:2]<(3,14)' 2>$null; $runtimeReady=($LASTEXITCODE -eq 0) } catch { $runtimeReady=$false }
+    $existingRuntime = Test-StudioPython $runtimePython
+    $runtimeReady = $existingRuntime -and $existingRuntime.compatible
 }
 if (-not $runtimeReady) { Run-Python -Arguments @('-m','venv','--clear','.venv') }
 $script:PythonCommand=$runtimePython

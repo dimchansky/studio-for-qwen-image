@@ -17,8 +17,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>io.github.qwenstudio</string>
 <key>CFBundleName</key><string>Qwen Studio</string>
 <key>CFBundleDisplayName</key><string>Qwen Studio</string>
-<key>CFBundleVersion</key><string>220</string>
-<key>CFBundleShortVersionString</key><string>2.2.0</string>
+<key>CFBundleVersion</key><string>221</string>
+<key>CFBundleShortVersionString</key><string>2.2.1</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>

@@ -325,5 +325,10 @@
   "使用 <image{mask}> 作为 <image{source}> 的蒙版，修改白色区域，保留其他部分。": "Use <image{mask}> as a mask for <image{source}>. Edit the white areas and preserve the rest.",
   "修改 <image{image}> 中红色标注的区域，最终图片不要保留标记。": "Edit the red-marked areas in <image{image}>. Remove the marks from the final image.",
   "桌面显示组件无法启动。请检查 WebView2 和数据目录权限后重新检测。": "The desktop view could not start. Check WebView2 and data folder permissions, then run the checks again.",
-  "已下载的图像模型无需重下；提示词增强模型是额外权重。": "Keep your existing image model. Prompt enhancers are additional downloads."
+  "已下载的图像模型无需重下；提示词增强模型是额外权重。": "Keep your existing image model. Prompt enhancers are additional downloads.",
+  "正在查找已安装的 Python…": "Looking for installed Python…",
+  "已找到 Python，但版本或架构不兼容。需要 64 位 Python 3.10–3.13。": "Python was found, but its version or architecture is incompatible. Use 64-bit Python 3.10–3.13.",
+  "指定的 Python 环境不可用，请检查 QWEN_STUDIO_PYTHON。": "The selected Python environment is unavailable. Check QWEN_STUDIO_PYTHON.",
+  "Python 查找未能完成，请查看详细日志。": "Python discovery could not finish. See the detailed log.",
+  "未找到可用的 Python。安装 64 位 Python 3.10–3.13 后重新检测。": "No working Python was found. Install 64-bit Python 3.10–3.13, then check again."
 }

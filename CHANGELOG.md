@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.1 (2026-09-21)
+
+- Fixed Windows Python discovery in freshly extracted downloads. The app checks an existing app environment, Python Launcher, registered installations and current/user/system PATH, then probes the actual interpreter.
+- Dependency setup uses the same discovery logic. A working global Python environment can be used directly; repairs install into the app environment. Unsupported versions, 32-bit interpreters and missing dependencies have distinct results.
+- Added Windows tests for fresh installs, existing environments, registration without PATH and incompatible interpreters.
+
+修复 Windows 下载版将“尚未建立应用环境”误报为未安装 Python 的问题；检测与安装共用查找逻辑，并显示实际 Python 路径。Mac 功能无变化。
+
 ## 2.2.0 (2026-09-21)
 
 - Added a Python-independent environment screen, required-check gate, in-app dependency repair and recovery after runtime failures on both platforms.

@@ -35,6 +35,8 @@ jobs:
             [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$null,[ref]$parseErrors)
             if ($parseErrors) { throw ($parseErrors | Out-String) }
           }
+      - run: ./windows/tests/python-discovery.ps1
+        shell: powershell
       - run: ./windows/build.ps1
         shell: pwsh
   macos:

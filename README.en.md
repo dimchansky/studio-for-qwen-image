@@ -18,8 +18,8 @@ Download the ZIP for your platform from [Releases](https://github.com/rigorhormi
 
 | Platform | Package | First launch |
 | --- | --- | --- |
-| Windows x64 | [QwenStudio-2.2.0-windows-x64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.0/QwenStudio-2.2.0-windows-x64.zip) | Extract, open `start.cmd`, and follow the in-app environment check |
-| Mac Apple Silicon | [QwenStudio-2.2.0-macos-arm64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.0/QwenStudio-2.2.0-macos-arm64.zip) | Extract, open `Qwen Studio.app`, and follow the environment check |
+| Windows x64 | [QwenStudio-2.2.1-windows-x64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.1/QwenStudio-2.2.1-windows-x64.zip) | Extract, open `start.cmd`, and follow the in-app environment check |
+| Mac Apple Silicon | [QwenStudio-2.2.1-macos-arm64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.1/QwenStudio-2.2.1-macos-arm64.zip) | Extract, open `Qwen Studio.app`, and follow the environment check |
 
 Packages include the desktop application but **exclude Python, model weights and Ollama**. The Windows package includes the .NET runtime. Mac Python dependencies live in the application data directory, so the App can move to Applications after setup. These releases are not developer-signed or Apple-notarized.
 
