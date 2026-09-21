@@ -32,7 +32,7 @@ Qwen Studio 是为解决 Ollama 等平台暂不支持 Qwen Image 2.1 情况的�
 - 在 Ollama 模型之间切换，并按模型能力调整思考强度。
 - 保存和搜索会话，浏览图片库，点开原图或另存为 PNG。
 - 排队提交任务，查看生成预览，停止正在执行的任务。
-- 首次下载选择 ModelScope 或 Hugging Face，查看进度、实时速度和预计剩余时间；中断后可继续下载。
+- 我们提供ModelScope 或 Hugging Face下载源，并允许您自由选择。
 
 
 <p align="center"><img src="docs/images/download-source.png" width="460" alt="首次下载时选择 ModelScope 或 Hugging Face"></p>
