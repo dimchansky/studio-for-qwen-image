@@ -6,7 +6,7 @@
 
 Qwen Studio 是为解决 Ollama 等平台暂不支持 Qwen Image 2.1 情况的替代交流平台。
 
-在一个本地桌面窗口里生成图片、修改图片，也可以接入已有的 Ollama 模型讨论创意。图像由 Diffusers 运行 Qwen-Image-2.1，普通聊天交给 Ollama。这个项目是独立社区应用，与 Qwen、Ollama 没有隶属关系。
+在一个本地桌面窗口里生成图片、修改图片，也可以接入已有的 Ollama 模型讨论创意。图像由 Diffusers 运行 Qwen-Image-2.1生成。这个项目是独立社区应用，与 Qwen、Ollama 没有隶属关系。
 
 ![Qwen Studio 首页](docs/images/home.png)
 
@@ -34,7 +34,6 @@ Qwen Studio 是为解决 Ollama 等平台暂不支持 Qwen Image 2.1 情况的�
 - 排队提交任务，查看生成预览，停止正在执行的任务。
 - 首次下载选择 ModelScope 或 Hugging Face，查看进度、实时速度和预计剩余时间；中断后可继续下载。
 
-页面采用白色与浅灰色的圆润布局，保留折叠、页面切换和引导语动画。首页引导语可选中文、英文或跟随系统；其余界面目前主要为中文。
 
 <p align="center"><img src="docs/images/download-source.png" width="460" alt="首次下载时选择 ModelScope 或 Hugging Face"></p>
 
@@ -49,7 +48,7 @@ Qwen Studio 是为解决 Ollama 等平台暂不支持 Qwen Image 2.1 情况的�
 | 内存 | 使用 CPU offload；需求随图片尺寸和任务变化，尚未测出通用最低配置 |
 | 普通聊天 | 本机 Ollama，地址 `http://127.0.0.1:11434`，至少已下载一个聊天模型 |
 
-Mac 开发环境为 48 GB 统一内存的 Apple M5 Pro。Windows 桌面已可编译；不同 NVIDIA 显卡的显存需求和生成速度仍需实机反馈。2K 选项已接入，不代表每台机器都能完成 2K 生成。遇到内存不足时，先用 512 或 768 尺寸。
+Mac 开发环境为 48 GB 统一内存的 Apple M5 Pro。Windows 桌面已可编译；不同 NVIDIA 显卡的显存需求和生成速度仍需实机反馈。遇到内存不足时，先用 512 或 768 尺寸。
 
 ## 模型来源与参数
 
