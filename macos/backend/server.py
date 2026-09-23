@@ -8,7 +8,7 @@ import model_store
 import perf
 from environment_probe import is_environment_error
 from generation_options import apply_preset, plan_references, validate_options
-from image_jobs import run_image_job
+from image_jobs import run_enhance_job, run_image_job
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get('QWEN_STUDIO_DATA', str(Path.home() / 'Library/Application Support/Qwen Studio')))
@@ -184,16 +184,24 @@ def status():
 
 # ---- Jobs
 
+def prompt_meta(job,payload):
+    # A rewrite that was already shown must survive a stop or a later failure.
+    return {'original_prompt':payload['prompt'],'enhanced_prompt':job['enhanced_prompt']} if job.get('enhanced_prompt') else {}
+
 def run_job(job, payload):
     global ACTIVE
-    sid=job['session_id']
+    sid=job['session_id'];chat=job['mode']!='enhance'
     try:
-        result=run_image_job(job,payload,ROOT,DATA,MODELS)
-        message(sid,'assistant','图片已生成。',result['images'],result['meta'])
-        job.update(state='done',stage='完成',progress=1)
+        if chat:
+            result=run_image_job(job,payload,ROOT,DATA,MODELS)
+            message(sid,'assistant','图片已生成。',result['images'],result['meta'])
+            job.update(state='done',stage='完成',progress=1)
+        else:
+            result=run_enhance_job(job,payload,ROOT,DATA,MODELS)
+            job.update(result=result,state='done',stage='完成',progress=1)
     except InterruptedError:
         job.update(state='cancelled',stage='已停止')
-        message(sid,'assistant','已停止本次任务。',meta={'cancelled':True,'job_id':job['id']})
+        if chat: message(sid,'assistant','已停止本次任务。',meta={'cancelled':True,'job_id':job['id'],**prompt_meta(job,payload)})
     except Exception as e:
         diagnostic=str(e)
         log_path=DATA/'jobs'/f"{job['id']}.log"
@@ -201,14 +209,14 @@ def run_job(job, payload):
             with log_path.open('rb') as stream:
                 stream.seek(max(0,log_path.stat().st_size-16000));diagnostic+='\n'+stream.read().decode(errors='replace')
         job.update(state='error',stage='任务失败',error=str(e),environment_error=is_environment_error(diagnostic))
-        message(sid,'assistant',str(e),meta={'error':True,'job_id':job['id']})
+        if chat: message(sid,'assistant',str(e),meta={'error':True,'job_id':job['id'],**prompt_meta(job,payload)})
         if job.get('environment_error'):
             # A broken runtime cannot execute queued work. Keep every prompt in
             # its chat, with an explicit result, instead of repeatedly failing.
             with LOCK:
                 for queued_id,_ in QUEUE:
                     queued=JOBS[queued_id];queued.update(state='cancelled',stage='已停止')
-                    message(queued['session_id'],'assistant','环境缺失，排队任务已停止。',meta={'cancelled':True,'job_id':queued_id})
+                    if queued['mode']!='enhance': message(queued['session_id'],'assistant','环境缺失，排队任务已停止。',meta={'cancelled':True,'job_id':queued_id})
                 QUEUE.clear()
     finally:
         with LOCK:
@@ -230,12 +238,10 @@ def cancel_job(jid):
         if job['state']=='queued':
             QUEUE[:]=[(key,p) for key,p in QUEUE if key!=jid]
             job.update(state='cancelled',stage='已取消排队')
-            message(job['session_id'],'assistant','已取消排队。',meta={'cancelled':True,'job_id':job['id']})
+            if job['mode']!='enhance': message(job['session_id'],'assistant','已取消排队。',meta={'cancelled':True,'job_id':job['id']})
         elif job['state']=='running':job.update(cancel=True,stage='正在停止')
 
-def validate_job(p):
-    """Normalise and validate a generation request in place (shared by /generate and /estimate)."""
-    prefs=preferences()
+def validate_canvas(p):
     refs=p.get('images',[])
     if not isinstance(refs,list) or len(refs)>10: raise ValueError('最多使用 10 张参考图。')
     for name in refs:
@@ -244,6 +250,11 @@ def validate_job(p):
         p[key]=int(p.get(key,1024))
         if p[key]<256 or p[key]>2752 or p[key]%32: raise ValueError('图片尺寸须为 256–2752 之间的 32 的倍数。')
     if p['width']*p['height']>4_300_800: raise ValueError('图片总像素暂不超过约 430 万，请选择支持的 2K 尺寸。')
+
+def validate_job(p):
+    """Normalise and validate a generation request in place (shared by /generate and /estimate)."""
+    prefs=preferences()
+    validate_canvas(p)
     p['seed']=int(p.get('seed',-1))
     if p['seed'] < -1 or p['seed']>2**32-1: raise ValueError('种子须为 -1 或 0–4294967295。')
     p.setdefault('enhance',False);p.setdefault('ratio_mode','fixed')
@@ -259,8 +270,9 @@ def validate_job(p):
     return p
 
 def missing_components(p):
-    task=('edit' if p.get('images') else 't2i') if p.get('enhance') else None
-    keys=model_store.required_components(p['variant'],p['turbo'],task)
+    enhance_only=p.get('mode')=='enhance'
+    task=('edit' if p.get('images') else 't2i') if p.get('enhance') or enhance_only else None
+    keys=[model_store.PE_COMPONENTS[task]] if enhance_only else model_store.required_components(p['variant'],p['turbo'],task)
     return [model_store.MANIFEST[k]['label'] for k in keys if not model_store.ready(MODELS,k)]
 
 def start_job(p):
@@ -283,6 +295,30 @@ def start_job(p):
         with connection() as c:
             c.execute("UPDATE sessions SET title=? WHERE id=? AND title IN ('新会话','New chat','Новый чат')",(prompt[:28],p['session_id']))
         QUEUE.append((jid,p.copy()))
+        advance_queue()
+    return job
+
+def start_enhance(p):
+    """Queue the prompt enhancer alone; the rewrite goes back to the composer, not into a chat."""
+    prompt=str(p.get('prompt','')).strip()
+    if not prompt or len(prompt)>16000: raise ValueError('请输入 1–16000 字的内容。')
+    keys=('prompt','images','width','height','ratio_mode','exact_text','transparent','thinking_budget')
+    p={key:p[key] for key in keys if key in p}
+    p.update(prompt=prompt,mode='enhance');p.setdefault('ratio_mode','fixed')
+    validate_canvas(p);validate_options(p)
+    p['thinking_budget']=int(p.get('thinking_budget') or preferences()['thinking_budget'])
+    if p['thinking_budget'] not in (1024,3072,8192,24000): raise ValueError('不支持的思考长度。')
+    missing=missing_components(p)
+    if missing: raise ValueError('请先在“模型设置”中下载：'+'、'.join(missing))
+    with LOCK:
+        if STOPPING: raise ValueError('应用正在关闭，请重新打开后发送。')
+        if len(QUEUE)>=10: raise ValueError('已有 10 条消息排队，请稍后再发送。')
+        jid=uuid.uuid4().hex
+        job={'id':jid,'session_id':None,'state':'queued','stage':'等待前一个任务完成','progress':None,'text':'','started':time.time(),'mode':'enhance'}
+        JOBS[jid]=job
+        # Someone is waiting at the prompt for about a minute: go ahead of queued images, behind earlier enhancements.
+        position=next((i for i,(key,_) in enumerate(QUEUE) if JOBS[key]['mode']!='enhance'),len(QUEUE))
+        QUEUE.insert(position,(jid,p))
         advance_queue()
     return job
 
@@ -369,6 +405,7 @@ class Handler(BaseHTTPRequestHandler):
                 name=uuid.uuid4().hex+'.png';im.save(DATA/'images'/name)
                 return self.send_json({'image':name})
             if path=='/api/generate': return self.send_json(start_job(p))
+            if path=='/api/enhance': return self.send_json(start_enhance(p))
             if path=='/api/estimate': return self.send_json(estimate(p))
             if path=='/api/cancel':
                 cancel_job(p['id'])

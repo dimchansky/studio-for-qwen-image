@@ -1,6 +1,7 @@
 """One image job = up to three disposable processes, run serially with cancellation between them:
 prompt enhancement (MLX), prompt encoding (text encoder) and diffusion (transformer + VAE).
 Each process exits before the next loads, so their weights never share the 32 GB of memory.
+An enhance job runs only the first process and hands the rewrite back to the composer.
 """
 import contextlib
 import json
@@ -105,6 +106,8 @@ def run_image_job(job, payload, root, data, models):
         rewrite = result.get('rewrite', {})
         validate_rewrite(rewrite, len(images))
         config['prompt'] = rewrite['positive_prompt']
+        # Shown while the image is still being made, and kept if the job is stopped.
+        job['enhanced_prompt'] = rewrite.get('raw_prompt') or rewrite['positive_prompt']
     else:
         config['prompt'] = protect_text(original, exact_text(original, payload.get('exact_text', '')))
     if payload.get('transparent'):
@@ -160,8 +163,36 @@ def run_image_job(job, payload, root, data, models):
                                              'reference_resolution')}
     meta.update(job_id=job['id'], mode='image', seconds=round(time.time() - job['started']), dtype=dtype,
                 original_prompt=original, effective_prompt=config['prompt'],
-                enhanced_prompt=rewrite['positive_prompt'] if rewrite else None,
+                enhanced_prompt=job.get('enhanced_prompt'),
                 enhancer=('PE-I2I' if images else 'PE-T2I') if rewrite else None,
                 seeds=result.get('seeds', [config['seed']]), reference_images=images,
                 step_seconds=result.get('step_seconds'), cached_embeddings=cached)
     return dict(images=names, meta=meta)
+
+
+def remove_job_files(data, job_id):
+    for path in (data / 'jobs').glob(job_id + '.*'):
+        path.unlink(missing_ok=True)
+
+
+def run_enhance_job(job, payload, root, data, models):
+    """Only the prompt enhancer: returns its rewrite and the canvas size it implies."""
+    from PIL import Image
+    images = payload.get('images', [])
+    # A fresh seed on every press, so pressing again gives another variant even with a locked image seed.
+    config = {**payload, 'models': str(models), 'data': str(data), 'job_id': job['id'], 'seed': secrets.randbelow(2**32),
+              'enhancer_path': str(model_store.pe_dir(models, 'edit' if images else 't2i'))}
+    try:
+        rewrite = run_child('enhancer_worker.py', config, job, root, data, '.pe').get('rewrite', {})
+    except InterruptedError:
+        remove_job_files(data, job['id'])
+        raise
+    validate_rewrite(rewrite, len(images))
+    sizes = []
+    for name in images:
+        with Image.open(data / 'images' / name) as image:
+            sizes.append(image.size)
+    width, height = resolve_size(payload, rewrite, sizes)
+    # No chat refers to this job, so its input and log (which contain the prompt) are not kept.
+    remove_job_files(data, job['id'])
+    return dict(prompt=rewrite.get('raw_prompt') or rewrite['positive_prompt'], width=width, height=height)

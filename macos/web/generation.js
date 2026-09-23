@@ -55,8 +55,10 @@ $('#download-all').onclick=safe(async()=>{const keys=($('#download-all').dataset
 function promptDetails(meta){
  const details=document.createElement('details');details.className='prompt-details';
  const summary=document.createElement('summary');summary.textContent='生成详情';details.append(summary);
- const settings=[meta.variant==='uc'?'无审查':'官方',meta.turbo?'极速':null,meta.dtype,meta.reference_resolution&&meta.reference_images?.length?`参考图 ${meta.reference_resolution} px`:null,meta.step_seconds?`每步 ${meta.step_seconds} 秒`:null].filter(Boolean).map(value=>t(value)).join(' · ');
- for(const [label,value] of [['原始提示词',meta.original_prompt],['增强提示词',meta.enhanced_prompt],['实际提示词',meta.effective_prompt],['随机种子',(meta.seeds||[meta.seed]).join(', ')],['设置',settings]]){
+ // Stopped and failed jobs keep only their prompts, so there are no settings to list.
+ const settings=meta.variant?[meta.variant==='uc'?'无审查':'官方',meta.turbo?'极速':null,meta.dtype,meta.reference_resolution&&meta.reference_images?.length?`参考图 ${meta.reference_resolution} px`:null,meta.step_seconds?`每步 ${meta.step_seconds} 秒`:null].filter(Boolean).map(value=>t(value)).join(' · '):'';
+ const effective=[meta.original_prompt,meta.enhanced_prompt].includes(meta.effective_prompt)?null:meta.effective_prompt;
+ for(const [label,value] of [['原始提示词',meta.original_prompt],['增强提示词',meta.enhanced_prompt],['实际提示词',effective],['随机种子',(meta.seeds||[meta.seed]).join(', ')],['设置',settings]]){
   if(value===undefined||value===null||value==='')continue;
   const heading=document.createElement('p');heading.className='muted small';heading.textContent=label;
   const body=document.createElement('p');body.className='prompt-value';body.setAttribute('translate','no');body.textContent=String(value);details.append(heading,body);

@@ -184,3 +184,11 @@ textarea:focus-visible{background:transparent}
 .session-delete svg{width:16px;height:16px}
 @media(hover:none){.session-delete{opacity:1}}
 .delete-session-text{overflow-wrap:anywhere;font-size:13px}
+.enhance-status{display:flex;align-items:center;gap:6px;margin:8px 2px 0;font-size:11px;color:var(--muted);background:#e8e8e8;border-radius:9px;padding:3px 4px 3px 10px}
+.enhance-status span{flex:1;min-width:0;overflow-wrap:anywhere}
+.enhance-status .text-button{padding:4px 8px;font-size:11px}
+#composer.enhancing textarea{opacity:.55}
+.enhance-now{white-space:nowrap}
+.enhance-now:disabled{opacity:.45}
+.live-prompt{margin:0 0 14px}
+@media(max-width:650px){.enhance-now span{display:none}}

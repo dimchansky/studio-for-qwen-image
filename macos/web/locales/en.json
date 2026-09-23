@@ -339,7 +339,7 @@
  "4 步蒸馏模型，适合草稿；复杂修改效果较弱": "4-step distilled model for drafts; weaker on complex edits",
  "25 步，速度与质量平衡": "25 steps: balanced speed and quality",
  "40 步，官方默认设置": "40 steps: the official default",
- "toolbar:增强提示词": "Enhance prompt",
+ "toolbar:增强提示词": "Auto-enhance",
  "模型文件": "Model files",
  "所有文件从 Hugging Face 固定版本下载，并逐个校验 SHA-256。": "All files come from pinned Hugging Face revisions and are verified with SHA-256.",
  "下载全部缺少的文件": "Download all missing files",
@@ -450,5 +450,13 @@
  "同时删除这个会话中的图片": "Also delete this chat's images",
  "在其他会话中用作参考图的图片会保留；已保存到“下载”文件夹的副本不受影响。": "Images used as references in other chats are kept; copies you saved to Downloads are not affected.",
  "删除": "Delete",
- "会话已删除": "Chat deleted"
+ "会话已删除": "Chat deleted",
+ "立即增强": "Enhance",
+ "只增强提示词，不生成图片": "Enhance the prompt now, without generating an image",
+ "生成前自动增强提示词": "Enhance the prompt automatically before each generation",
+ "恢复原文": "Restore original",
+ "提示词已增强。": "Prompt enhanced.",
+ "已停止提示词增强": "Prompt enhancement stopped",
+ "提示词增强：": "Prompt enhancement: ",
+ "其他尺寸": "Other sizes"
 }

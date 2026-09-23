@@ -28,6 +28,10 @@
   "Another chat: $1"
  ],
  [
+  "^等待中 (\\d+)：提示词增强$",
+  "Queued $1: prompt enhancement"
+ ],
+ [
   "^等待中 (\\d+)：(.*)$",
   "Queued $1: $2"
  ],
@@ -118,5 +122,9 @@
  [
   "^会话已删除，同时删除了 (\\d+) 张图片$",
   "Chat deleted along with $1 images"
+ ],
+ [
+  "^提示词已增强，图片尺寸改为 (\\d+) × (\\d+)。$",
+  "Prompt enhanced; image size set to $1 × $2."
  ]
 ]

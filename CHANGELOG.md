@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- An **Enhance** button next to Send runs only the prompt enhancer (about a minute) and puts the rewrite
+  into the prompt field, applying the aspect ratio it chose when the ratio is left to the enhancer.
+  Auto-enhance is switched off afterwards so the prompt is not rewritten twice; “Restore original” undoes
+  it. Enhancements run ahead of queued images and are not stored in the chat.
+- With Auto-enhance on, the rewritten prompt appears in the progress card as soon as the enhancer is done;
+  a stopped or failed job keeps it in the chat. Generation details list the enhancer's own wording and
+  show the effective prompt only when it differs.
 - Chats can be deleted from the sidebar (trash icon) or the chat menu. A confirmation dialog offers
   to delete the chat's images too; images that another chat uses as references are kept. The chat's job
   logs and inputs, which contain its prompts, are always removed.

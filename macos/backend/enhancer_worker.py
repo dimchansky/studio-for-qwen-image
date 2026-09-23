@@ -23,6 +23,8 @@ def run(p, report):
     report(stage='正在增强提示词', progress=None)
     result = enhance_mlx(checkpoint, messages, profile, p['seed'], report, thinking_budget=budget, images=images)
     validate_rewrite(result, len(images))
+    # The enhancer's own wording is what people read and edit; generation adds the protection again.
+    result['raw_prompt'] = result['positive_prompt']
     # Keep explicit lettering unchanged, even when the scene description is English.
     result['positive_prompt'] = protect_text(result['positive_prompt'], exact_text(p['prompt'], p.get('exact_text', '')))
     report(stage='提示词增强完成', progress=0, rewrite=result)

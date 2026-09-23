@@ -50,7 +50,9 @@ as `<image1>` … `<image10>`:
   or translate text, restyle, style from a reference, try-on, face swap, group photo, expression and
   pose, restore and colourise, outpaint, 360° panorama, character turnaround, infographic.
 - **Official prompt enhancers** (PE-T2I / PE-I2I): turn a short idea into a detailed prompt and pick the
-  aspect ratio.
+  aspect ratio. **Enhance** rewrites the prompt in place, without making a picture, so you can edit the
+  result and generate from it; **Auto-enhance** does it before every generation and shows the rewrite
+  as soon as it is ready, while the picture is still being made.
 - **Two models**: the official weights, or an optional community “uncensored” version.
 - **Speed presets**: Turbo (4 steps), Standard (25), Quality (40), with a time estimate before you send.
 - Negative prompt and guidance, seeds, 1–4 images per job, queue, cancel, live preview, gallery,

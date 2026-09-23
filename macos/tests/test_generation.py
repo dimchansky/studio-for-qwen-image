@@ -10,7 +10,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'backend'))
 from generation_options import (validate_options, exact_text, protect_text, resolve_size, validate_rewrite, SIZES,
     apply_preset, plan_references, reference_tokens, RGBA_TEMPLATE)
 from prompt_enhancer import PROFILES, parse_output, messages_for, reference_image
-from image_jobs import run_child, run_image_job, RetryInBf16
+from image_jobs import run_child, run_enhance_job, run_image_job, RetryInBf16
 import staged_pipeline
 
 class GenerationContract(unittest.TestCase):
@@ -88,7 +88,10 @@ class GenerationContract(unittest.TestCase):
                 if worker=='encode_worker.py':Path(config['embeds_path']).write_bytes(b'x');return {}
                 return {'images':['a.png','b.png'],'seeds':[42,43],'step_seconds':9.5}
             p=dict(mode='image',prompt='生成一张讲解二战历史的流程图',width=2048,height=2048,steps=40,seed=42,enhance=True,ratio_mode='auto',images=[],count=2,transparent=True)
-            with patch('image_jobs.run_child',child):result=run_image_job({'id':'test','started':time.time()},p,root,root,root)
+            job={'id':'test','started':time.time()}
+            with patch('image_jobs.run_child',child):result=run_image_job(job,p,root,root,root)
+            # The rewrite is on the job as soon as the enhancer is done, before the image exists.
+            self.assertEqual(job['enhanced_prompt'],'A chart reading 第二次世界大战');self.assertEqual(result['meta']['enhanced_prompt'],job['enhanced_prompt'])
             self.assertEqual([c[0] for c in calls],['enhancer_worker.py','encode_worker.py','worker.py'])
             self.assertEqual((calls[2][1]['width'],calls[2][1]['height']),(1536,2752))
             self.assertTrue(calls[1][1]['prompt'].startswith('This is an RGBA image'))
@@ -103,6 +106,24 @@ class GenerationContract(unittest.TestCase):
             with patch('image_jobs.run_child',return_value={'rewrite':{}}) as run:
                 with self.assertRaises(ValueError):run_image_job({'id':'test','started':time.time()},p,root,root,root)
                 self.assertEqual(run.call_count,1)
+    def test_enhance_only_returns_rewrite_and_canvas(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);self.job_files(root);calls=[]
+            for name in ('e1.log','e1.pe.input.json','e10.log'):(root/'jobs'/name).write_text('prompt')
+            def child(worker,config,job,*args):
+                calls.append((worker,config.copy()))
+                return {'rewrite':dict(parse_ok=True,raw_prompt='A cabin by a lake',positive_prompt='A cabin by a lake\nRender the following visible text exactly',wh_ratio='16:9')}
+            p=dict(mode='enhance',prompt='домик у озера',width=1024,height=1024,ratio_mode='auto',images=[])
+            with patch('image_jobs.run_child',child):result=run_enhance_job({'id':'e1'},p,root,root,root)
+            # The composer gets the enhancer's own words and the 1K size of the ratio it chose.
+            self.assertEqual(result,{'prompt':'A cabin by a lake','width':1376,'height':768})
+            self.assertEqual([c[0] for c in calls],['enhancer_worker.py']);self.assertTrue(calls[0][1]['enhancer_path'].endswith('t2i-mlx4'))
+            self.assertEqual([f.name for f in (root/'jobs').iterdir()],['e10.log'])
+            with patch('image_jobs.run_child',child):self.assertEqual(run_enhance_job({'id':'e2'},{**p,'ratio_mode':'fixed'},root,root,root)['width'],1024)
+            (root/'jobs'/'e3.log').write_text('prompt')
+            with patch('image_jobs.run_child',side_effect=InterruptedError):
+                with self.assertRaises(InterruptedError):run_enhance_job({'id':'e3'},p,root,root,root)
+            self.assertFalse((root/'jobs'/'e3.log').exists())
     def test_embeddings_cache_and_random_edit_seed(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);self.job_files(root);calls=[]
