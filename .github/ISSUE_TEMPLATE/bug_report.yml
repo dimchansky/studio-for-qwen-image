@@ -1,28 +1,30 @@
-name: Bug report / 问题反馈
-description: Report a reproducible problem / 反馈可重现的问题
+name: Bug report
+description: Report a reproducible problem
 title: "[Bug] "
 body:
   - type: input
     id: version
     attributes:
-      label: App version / 应用版本
+      label: Commit
+      description: Output of `git rev-parse --short HEAD`
     validations:
       required: true
   - type: textarea
     id: system
     attributes:
-      label: OS and hardware / 系统与硬件
-      description: OS version, GPU, RAM/VRAM, Python and PyTorch versions if known.
+      label: Mac and software
+      description: Mac model, chip, memory (GB), macOS version, Python version, free disk space.
     validations:
       required: true
   - type: textarea
     id: reproduce
     attributes:
-      label: Steps and expected result / 重现步骤与预期结果
+      label: Steps and expected result
+      description: Include the mode (Turbo / Standard / Quality), size, number of references and whether the prompt enhancer was on.
     validations:
       required: true
   - type: textarea
     id: error
     attributes:
-      label: Error or screenshot / 错误或截图
-      description: Remove private prompts, paths and tokens before sharing.
+      label: Error, log excerpt or screenshot
+      description: The end of `data/jobs/<id>.log` and Settings → Environment check. Remove private prompts, images, paths and tokens.

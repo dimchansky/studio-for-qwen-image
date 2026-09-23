@@ -5,6 +5,12 @@ import unittest
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'backend'))
 from prompt_enhancer import PROFILES, enhance_mlx
+try:
+    import mlx.core  # noqa: F401  (needs a Metal device; CI virtual machines may not have one)
+    import mlx_vlm  # noqa: F401
+    MLX = True
+except Exception:  # noqa: BLE001
+    MLX = False
 
 class Processor:
     def __init__(self,thinking=True):self.thinking=thinking;self.kwargs=None
@@ -15,6 +21,7 @@ class Processor:
 class Chunk:
     def __init__(self,text,n):self.text=text;self.generation_tokens=n;self.generation_tps=31.5
 
+@unittest.skipUnless(MLX,'MLX with a Metal device is required')
 class EnhancerMLX(unittest.TestCase):
     def run_enhancer(self,profile,processor,budget=3072):
         calls={};reports=[]

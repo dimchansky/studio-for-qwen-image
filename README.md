@@ -1,98 +1,177 @@
-<p align="center"><img src="assets/AppIcon.png" width="112" alt="Qwen Studio 图标"></p>
+<p align="center"><img src="assets/AppIcon.png" width="96" alt=""></p>
 
-# Qwen Studio
+# Studio for Qwen Image
 
-[English](README.en.md) | 简体中文
+A local web studio for **[Qwen-Image-2.1](https://huggingface.co/Qwen/Qwen-Image-2.1)** on Apple Silicon
+Macs with **32 GB** of memory: text-to-image, editing with up to 10 reference images, transparent PNGs,
+local edits marked with boxes or masks, and the official prompt enhancers. Everything runs on the Mac's
+GPU; prompts and images never leave the machine.
 
-Qwen Studio 是为解决 Ollama 等平台暂不支持 Qwen Image 2.1 情况的替代交流平台。
+It is a fork of [rigorhormist/QwenStudio](https://github.com/rigorhormist/QwenStudio). The original
+macOS app keeps about 33 GB of model weights in memory, so it cannot run on a 32 GB Mac. This fork makes
+every feature of the model work there — see [what changed and why](#what-changed-compared-to-qwenstudio-and-why).
 
-在一个本地桌面窗口里生成图片、修改图片，也可以接入已有的 Ollama 模型讨论创意。图像由 Diffusers 运行 Qwen-Image-2.1生成。这个项目是独立社区应用，与 Qwen、Ollama 没有隶属关系。
+English | [Русский](README.ru.md)
 
-![Qwen Studio 首页](docs/images/home.png)
+![Editing a picture: autumn to winter, with the original as the reference](docs/images/ui-edit.jpg)
 
-*上图为共享界面的截图。Mac 使用 AppKit 和 WKWebView，Windows 使用 WinForms 和 WebView2。*
+## Requirements
 
-## 下载与开始使用
+- A Mac with Apple Silicon (M1 or newer) and **at least 32 GB** of unified memory
+- macOS 14 or newer (tested on macOS 26.6, MacBook Pro M1 Max 32 GB)
+- Python 3.12 or 3.13 for arm64, for example `brew install python@3.12`
+- About 22 GB of free disk space for the core files (41 GB with every optional file)
 
-前往 [Releases](https://github.com/rigorhormist/QwenStudio/releases/latest) 下载对应平台的 ZIP。首次安装需要联网下载 Python 依赖，模型文件随后在应用中单独下载。
+## Quick start
 
-| 平台 | 下载包 | 首次使用 |
-| --- | --- | --- |
-| Windows x64 | [QwenStudio-2.2.1-windows-x64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.1/QwenStudio-2.2.1-windows-x64.zip) | 解压，打开 `start.cmd`，按应用内环境检测页完成设置 |
-| Mac Apple Silicon | [QwenStudio-2.2.1-macos-arm64.zip](https://github.com/rigorhormist/QwenStudio/releases/download/v2.2.1/QwenStudio-2.2.1-macos-arm64.zip) | 解压，打开 `Qwen Studio.app`，按环境检测页完成设置 |
-
-安装包包含桌面程序，**不包含 Python、模型权重和 Ollama**。Windows 包自带 .NET 运行时；Mac 的 Python 依赖安装在应用数据目录中，完成安装后可以将 App 移入“应用程序”。当前发布包没有开发者证书签名或 Apple 公证。
-
-完整步骤、校验方法和更新说明见 [安装与下载](docs/installation.zh-CN.md)。通过环境检测后，可以先启动 Ollama 使用普通聊天，无需先下载图像权重。
-
-## 可以做什么
-
-- 完整中文、英文与跟随系统，切换语言不改写用户输入或聊天记录。
-- 首次启动及发现依赖缺失时显示环境检测页；通过的项目显示 🎉，必需项通过后进入应用。
-- 在应用中安装或修复 Python 依赖；缺少 Python、WebView2 或显卡驱动时提供对应入口。
-- 输入提示词生成图片，添加参考图继续编辑；支持透明背景请求。
-- 调整图片尺寸、生成步数和随机种子，包括 2K 尺寸选项。
-- 在 Ollama 模型之间切换，并按模型能力调整思考强度。
-- 保存和搜索会话，浏览图片库，点开原图或另存为 PNG。
-- 排队提交任务，查看生成预览，停止正在执行的任务。
-- 我们提供ModelScope 或 Hugging Face下载源，并允许您自由选择。
-
-
-<p align="center"><img src="docs/images/download-source.png" width="460" alt="首次下载时选择 ModelScope 或 Hugging Face"></p>
-
-## 运行环境
-
-| 项目 | 要求与说明 |
-| --- | --- |
-| Mac | Apple Silicon，macOS 14 或更新；通过 PyTorch MPS 运行 |
-| Windows | Windows 10/11 x64，WebView2 Evergreen Runtime，支持所选 PyTorch CUDA 构建的 NVIDIA 显卡和驱动 |
-| Python | 64 位 Python 3.10–3.13；首次安装脚本优先查找 3.11 |
-| 模型空间 | 图像模型约 33.1 GB，两个增强模型各约 18.84 GB；分段下载合并、Python 依赖和生成结果还需要额外空间 |
-| 内存 | 使用 CPU offload；需求随图片尺寸和任务变化，尚未测出通用最低配置 |
-| 普通聊天 | 本机 Ollama，地址 `http://127.0.0.1:11434`，至少已下载一个聊天模型 |
-
-Mac 开发环境为 48 GB 统一内存的 Apple M5 Pro。Windows 桌面已可编译；不同 NVIDIA 显卡的显存需求和生成速度仍需实机反馈。遇到内存不足时，先用 512 或 768 尺寸。
-
-## 模型来源与参数
-
-应用使用 [Qwen-Image-2.1 官方模型](https://github.com/QwenLM/Qwen-Image-2.1)，可从 [ModelScope](https://modelscope.cn/models/Qwen/Qwen-Image-2.1) 或 [Hugging Face](https://huggingface.co/Qwen/Qwen-Image-2.1) 下载。两个来源对应同一组固定版本的文件，下载完成后进行 SHA-256 校验。
-
-步数和种子来自 Diffusers 的推理参数。步数控制去噪迭代次数；种子用来复现初始随机噪声。默认采用官方推荐的 40 步和 2048 × 2048。提示词增强默认开启，首次使用前需要下载对应的 PE-T2I 或 PE-I2I 模型。更详细的参数和显存说明见 [使用说明](docs/usage.zh-CN.md)。
-
-图像解码使用原始 FP32 VAE 和完整画面解码，避免低精度、分块解码引入的色带和拼接痕迹。生成中的预览也从完整潜空间解码后再缩小。模型本身仍可能生成不符合提示词、文字有误或细节异常的图片。
-
-## 本地数据
-
-- Mac：`~/Library/Application Support/Qwen Studio`
-- Windows：`%LOCALAPPDATA%\QwenStudio`
-
-会话保存在 SQLite 中，图片放在 `images`，模型默认放在 `models/Qwen-Image-2.1`。Windows 可用 `settings.local.json` 指定其他磁盘；已有配置会保留。应用没有账户系统，也不包含遥测。安装依赖和下载模型会访问相应的软件源；普通聊天连接本机 Ollama。详见 [安全与隐私](SECURITY.md)。
-
-## 从源码构建
-
-```sh
-git clone https://github.com/rigorhormist/QwenStudio.git
-cd QwenStudio
+```bash
+git clone https://github.com/dimchansky/studio-for-qwen-image.git
+cd studio-for-qwen-image
+./setup.sh      # creates .venv and installs pinned packages (~1.5 GB)
+./download.sh   # core model files (~19.4 GB), resumable, SHA-256 verified
+./run.sh        # starts the studio and opens http://127.0.0.1:8765
 ```
 
-Mac 需要 Xcode Command Line Tools；在 `macos` 目录运行 `./build.sh` 和 `./setup.command`。Windows 需要 .NET 10 SDK；在 `windows` 目录运行 `build.ps1` 和 `setup.cmd`。构建桌面程序不需要下载模型。
+Optional files can be downloaded later in **Settings → Model files**, or with `./download.sh --all`:
+the uncensored model (7.6 GB) and the two prompt enhancers (6 GB each).
 
-```text
-macos/       AppKit 桌面外壳、MPS 后端和界面
-windows/     WinForms 桌面外壳、CUDA 后端和界面
-assets/      项目图标
-docs/        中英文安装、使用和开发文档
-scripts/     发布打包工具
+## Features
+
+Everything Qwen-Image-2.1 can do is driven by the prompt plus 0–10 reference images, which you refer to
+as `<image1>` … `<image10>`:
+
+- **Text to image** at 1K (default) or 2K, with accurate text rendering in English and Chinese.
+- **Transparent PNGs** (RGBA): one switch next to the prompt.
+- **Editing**: continue from any result or upload pictures; up to **10 references** (try-on, group photos,
+  furnishing a room from product shots…).
+- **Local edits**: in the image viewer, mark areas with a circle, box or brush in five colours, or paint a
+  separate mask — the studio adds the prompt wording used in the official examples.
+- **Task templates**: background removal, extract an object, change background, product scene, replace
+  or translate text, restyle, style from a reference, try-on, face swap, group photo, expression and
+  pose, restore and colourise, outpaint, 360° panorama, character turnaround, infographic.
+- **Official prompt enhancers** (PE-T2I / PE-I2I): turn a short idea into a detailed prompt and pick the
+  aspect ratio.
+- **Two models**: the official weights, or an optional community “uncensored” version.
+- **Speed presets**: Turbo (4 steps), Standard (25), Quality (40), with a time estimate before you send.
+- Negative prompt and guidance, seeds, 1–4 images per job, queue, cancel, live preview, gallery,
+  generation details, English/Russian/Chinese interface.
+
+| Text rendering | Prompt enhancer | Turbo (4 steps) | Transparent PNG | Edit: before | Edit: after |
+|---|---|---|---|---|---|
+| ![](docs/images/text-rendering.jpg) | ![](docs/images/prompt-enhancer.jpg) | ![](docs/images/turbo.jpg) | ![](docs/images/transparent.jpg) | ![](docs/images/edit-before.jpg) | ![](docs/images/edit-after.jpg) |
+
+## Speed on a MacBook Pro M1 Max (32 GB)
+
+| Job (1024 × 1024) | Time |
+|---|---|
+| Text to image, Turbo | ≈ 1.5 min |
+| Text to image, Standard (25 steps) | ≈ 6 min |
+| Text to image, Quality (40 steps) | ≈ 9 min |
+| Edit with 1 reference, Turbo | ≈ 2 min |
+| Edit with 1–5 references, 12 steps | 4–5.5 min |
+| Prompt enhancer (adds) | 45–60 s |
+
+Newer chips are faster. 2K images take 6–7 times longer than 1K. The estimate next to the prompt learns
+from the jobs you run.
+
+## What changed compared to QwenStudio, and why
+
+In plain words — each point is a problem we hit on a 32 GB Mac and what the fork does about it.
+
+1. **The model did not fit into memory.** The original app loads the text encoder, the image model and
+   the decoder at full 16-bit precision — about 33 GB of weights — while the Mac has 32 GB in total.
+   *Now* every job runs as up to three short steps, each in its own process that exits (and frees its
+   memory) before the next one starts: prompt enhancer → text encoder → image model. The weights are
+   also compressed with almost no visible loss: the image model to 8 bits (7.6 GB instead of 14.2), the
+   text encoder to 8 bits (10 GB instead of 17.5) and the prompt enhancers to 4 bits (6 GB instead of 19).
+2. **Every edit came out broken.** A bug in PyTorch's Apple GPU backend corrupts one padding operation
+   inside the image encoder, so every reference image was damaged (reconstruction quality 10 dB instead of
+   42 dB). *Now* that operation is replaced by an equivalent one; the result is bit-for-bit the same as
+   on the CPU.
+3. **M1–M3 chips were slow.** They have no hardware support for the bfloat16 number format. *Now* the
+   studio computes in float16: 9.6 s per step instead of 16.3 s. If numbers ever overflow, it retries
+   in bfloat16 automatically.
+4. **Turning the result into pixels needed 18 GB more.** *Now* this happens after the image model is
+   unloaded and in 16 bits (8.6 GB, visually identical to 32 bits). 2K images are decoded in overlapping
+   tiles.
+5. **Many reference images ran out of memory.** Each 1024 px reference costs about 2.5 GB of cache.
+   *Now* the studio lowers the reference resolution just enough to stay within 6 GB (for example 3
+   references at 896 px, 10 at 384 px) and shows this under the prompt.
+6. **There was no fast mode.** *Now* “Turbo” uses a 4-step distilled LoRA: a picture in about 1.5
+   minutes instead of 6.
+7. **Only one model.** *Now* you can switch between the official weights and an optional community
+   “uncensored” version (a third-party modification whose method is not documented).
+8. **Downloading needed ~43 GB of free space at once and full-precision weights.** *Now* a pinned list
+   of compressed files (19.4 GB for the core set) is downloaded one file at a time, checked against its
+   SHA-256, and the studio refuses to start a file that would not fit on the disk.
+9. **A desktop wrapper and an Ollama chat.** *Now* it is a plain web app for any browser on your Mac
+   (bound to `127.0.0.1`). The chat mode was removed because it is unrelated to Qwen-Image; the Windows
+   version stays in the upstream project.
+10. **The interface** gained the model and speed switches with time estimates, task templates, box and
+    colour annotations, a low-memory warning, a diagnostics page and a Russian translation.
+11. **Tests and hardware checks** cover all of the above (`macos/tests`, `scripts/spikes`).
+
+## How it works
+
+```
+browser ──HTTP──▶ server.py (queue, sessions, downloads; no model code)
+                     │ one job = up to three disposable processes, one after another
+                     ├─▶ enhancer_worker.py  PE-T2I / PE-I2I, 4-bit MLX            (~6 GB)
+                     ├─▶ encode_worker.py    Qwen3-VL-8B text encoder, 8-bit SDNQ  (~12 GB) → cached embeddings
+                     └─▶ worker.py           image model GGUF Q8_0 + VAE, float16  (14–19 GB)
 ```
 
-贡献流程和检查命令见 [CONTRIBUTING.md](CONTRIBUTING.md)。界面文件在两个平台中保持一致，后端保留各自的进程和 GPU 处理方式。
+Weights live in `data/models`, pinned to exact Hugging Face revisions in
+[`macos/backend/models.json`](macos/backend/models.json). The diffusers version is pinned to a commit
+because Qwen-Image-2.1 is not in a diffusers release yet.
 
-## 官方生成能力
+## Settings
 
-已接入生图与改图的官方 Prompt Enhancer、七种 2K 比例、参考图比例继承、圈选/涂抹/独立蒙版、精确文案、RGBA、反向提示词和批量生成。增强模型各约 18.84 GB，分别在模型设置中下载。参见[完整配置与文字生成说明](docs/generation.zh-CN.md)，其中也列出了此次检查的范围和未实测的部分。
+`run.sh` sets sensible defaults; override any of them in the environment:
 
-## 许可证与致谢
+| Variable | Default | Meaning |
+|---|---|---|
+| `QWEN_STUDIO_PORT` | `8765` | Port on `127.0.0.1` |
+| `QWEN_STUDIO_DATA` | `./data` | Models, images, chats and logs |
+| `QWEN_STUDIO_DTYPE` | `auto` | `auto` (float16 with bfloat16 retry), `fp16` or `bf16` |
+| `QWEN_STUDIO_KV_BUDGET_GB` | `6` | Cache budget for reference images; raise it on 64 GB+ Macs |
+| `QWEN_STUDIO_ATTN_BUDGET_MB` | `512` | Size of attention slices on the GPU |
+| `QWEN_STUDIO_THINKING_BUDGET` | `3072` | Default thinking length of the prompt enhancer |
+| `PYTORCH_MPS_HIGH_WATERMARK_RATIO` | `1.0` | GPU memory cap, so an oversized job fails instead of swapping |
 
-应用自有代码采用 [MIT License](LICENSE)。**模型权重不适用 MIT**，使用 Qwen-Image-2.1 须遵守上游 [Qwen Research License](LICENSE.model.txt)，其中包含非商业使用限制。发布包不分发模型权重。
+## Troubleshooting
 
-本项目依赖 Qwen-Image-2.1、Diffusers、PyTorch、Transformers、Ollama 和 Microsoft WebView2。加号菜单的圆形排列与动画参考并改写自 [Ramotion/CircleMenu](https://github.com/Ramotion/circle-menu)，保留其 MIT 声明。详见 [第三方声明](THIRD_PARTY_NOTICES.md)。
+- **“Not enough memory”** — close memory-heavy apps (browsers with many tabs, video editors). Jobs need
+  12–19 GB; the studio warns when less than 10 GB is free.
+- **The first job is slow** — loading the models takes 40–60 s; later jobs with the same prompt reuse the
+  encoded prompt.
+- **Cyrillic or other text looks approximate** — the model renders English and Chinese best. Use Quality
+  mode and short phrases.
+- **Something else** — Settings → Environment check, and the job logs in `data/jobs/<id>.log`.
+
+## Development
+
+```bash
+.venv/bin/python -m unittest discover -s macos/tests -p 'test_*.py'
+.venv/bin/python -m unittest discover -s tests && node tests/i18n.test.cjs
+```
+
+Hardware checks that measure speed, memory and correctness on your Mac are in
+[`scripts/spikes`](scripts/spikes/README.md). Interface text lives in `macos/web/locales`
+(`python3 scripts/build_locales.py` rebuilds the bundle); the model list is rebuilt with
+`python3 scripts/build_manifest.py`.
+
+## Licenses and credits
+
+- Code: MIT, © Qwen Studio contributors and © Dmitrij Koniajev (Apple Silicon port). See [LICENSE](LICENSE).
+- Qwen-Image-2.1 and its prompt enhancers: [Qwen Research License](LICENSE.model.txt) —
+  **non-commercial use only**. Built with Qwen. The weights are downloaded separately and are not part
+  of this repository.
+- Model files come from [Qwen](https://huggingface.co/Qwen/Qwen-Image-2.1) (configs, VAE),
+  [unsloth](https://huggingface.co/unsloth/Qwen-Image-2.1-GGUF) (GGUF), [OzzyGT](https://huggingface.co/OzzyGT/Qwen_Image_2_1_sdnq_dynamic_8bit)
+  (8-bit text encoder), [prithivMLmods](https://huggingface.co/prithivMLmods/Qwen-Image-2.1-PE-T2I-MLX) (MLX prompt enhancers),
+  [Viggle](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) (turbo LoRA) and, optionally,
+  [abenzerps](https://huggingface.co/abenzerps/Qwen-Image-2.1-Uncensored-GGUF) (uncensored GGUF). Each keeps its own terms;
+  see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- “Qwen” is used only to describe compatibility. This project is not affiliated with Qwen, Alibaba or
+  the upstream author.

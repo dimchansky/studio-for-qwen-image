@@ -442,5 +442,10 @@
  "请选择要下载的模型。": "Choose the model files to download.",
  "极速模式不支持反向提示词和引导强度。": "Turbo mode does not support negative prompts or guidance.",
  "提示词增强模板未开启思考模式。": "The enhancer template did not enable thinking.",
- "极速 LoRA 基于官方权重训练，与无审查模型搭配时效果可能较差。": "The Turbo LoRA was trained on the official weights; with the uncensored model its results may be worse."
+ "极速 LoRA 基于官方权重训练，与无审查模型搭配时效果可能较差。": "The Turbo LoRA was trained on the official weights; with the uncensored model its results may be worse.",
+ "下载基础文件": "Download core files",
+ "必需，官方权重（GGUF Q8_0）": "Required, official weights (GGUF Q8_0)",
+ "可选，社区修改版（GGUF Q8_0）": "Optional, community-modified weights (GGUF Q8_0)",
+ "可选，“增强提示词”生成图片时需要": "Optional, enhances prompts for new images",
+ "可选，“增强提示词”修改图片时需要": "Optional, enhances prompts for edits"
 }

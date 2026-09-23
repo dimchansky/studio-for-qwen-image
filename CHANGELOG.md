@@ -1,5 +1,24 @@
 # Changelog
 
+## 3.0.0 — Studio for Qwen Image (2026-09-23)
+
+Fork of Qwen Studio 2.2.1 for Apple Silicon Macs with 32 GB of memory. See “What changed compared to
+QwenStudio, and why” in the README for the reasoning behind each change.
+
+- Every job runs as up to three disposable processes (prompt enhancer, text encoder, image model) so the
+  weights never share memory; 8-bit GGUF transformer, 8-bit SDNQ text encoder, 4-bit MLX prompt enhancers.
+- Fixed corrupted edits on Apple GPUs (PyTorch MPS padding bug in the VAE encoder); float16 compute with
+  an automatic bfloat16 retry; decoding in float16 after the image model is unloaded.
+- Automatic reference-image resolution to keep the cache within budget; cached prompt embeddings.
+- Turbo mode (4-step LoRA), a switch between the official and an optional uncensored model, time estimates,
+  task templates, box and colour annotations, low-memory warning, diagnostics page, Russian interface.
+- Pinned, SHA-256-verified downloads one file at a time with disk-space checks; `setup.sh`, `download.sh`
+  and `run.sh` for a browser-based setup.
+- Removed the native macOS shell, the Ollama chat, the download-source choice and the Windows version
+  (which stays in the upstream project).
+
+The entries below are from the upstream Qwen Studio project.
+
 ## 2.2.1 (2026-09-21)
 
 - Fixed Windows Python discovery in freshly extracted downloads. The app checks an existing app environment, Python Launcher, registered installations and current/user/system PATH, then probes the actual interpreter.

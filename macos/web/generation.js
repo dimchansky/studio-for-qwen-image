@@ -1,6 +1,8 @@
 /* Image controls, model files, estimates and diagnostics. */
 const COMPONENT_TITLES={base:'基础文件（配置与 VAE）',text_encoder:'文字编码器',transformer_official:'官方图像模型',transformer_uc:'无审查图像模型',turbo:'极速 LoRA',pe_t2i:'生图增强模型',pe_i2i:'改图增强模型'};
-const COMPONENT_NOTES={base:'必需',text_encoder:'必需，Qwen3-VL-8B（8 位）',transformer_official:'官方权重（GGUF Q8_0）',transformer_uc:'社区修改版（GGUF Q8_0）',turbo:'“极速”模式需要',pe_t2i:'“增强提示词”生成图片时需要',pe_i2i:'“增强提示词”修改图片时需要'};
+const COMPONENT_NOTES={base:'必需',text_encoder:'必需，Qwen3-VL-8B（8 位）',transformer_official:'必需，官方权重（GGUF Q8_0）',transformer_uc:'可选，社区修改版（GGUF Q8_0）',turbo:'“极速”模式需要',pe_t2i:'可选，“增强提示词”生成图片时需要',pe_i2i:'可选，“增强提示词”修改图片时需要'};
+// Core files make every mode work; the uncensored model and the prompt enhancers are optional.
+const CORE_COMPONENTS=['base','text_encoder','transformer_official','turbo'];
 function currentSize(){return $('#size').value.split(',').map(Number)}
 function enhanceOn(){return $('#enhance').checked}
 function generationOptions(){
@@ -38,16 +40,18 @@ function renderComponents(){
   button.textContent=item.ready?'已下载':item.downloading?'正在下载…':item.queued?'排队中':item.bytes?'继续下载':'下载';
  }
  const system=lastStatus?.system;if(system)$('#disk-info').textContent=`可用空间 ${formatBytes(system.free_disk)}`;
- const missing=Object.entries(components).filter(([,item])=>!item.ready);
+ const missing=Object.keys(components).filter(key=>!components[key].ready);
+ const core=missing.filter(key=>CORE_COMPONENTS.includes(key)),next=core.length?core:missing;
  const running=Object.values(components).some(item=>item.downloading||item.queued);
- $('#download-all').disabled=!missing.length||running;
- $('#download-all').textContent=missing.length?`下载全部缺少的文件（${formatBytes(missing.reduce((sum,[,item])=>sum+item.total-item.bytes,0))}）`:'全部文件已就绪';
+ const size=formatBytes(next.reduce((sum,key)=>sum+components[key].total-components[key].bytes,0));
+ const button=$('#download-all');button.dataset.components=next.join(',');button.disabled=!next.length||running;
+ button.textContent=!next.length?'全部文件已就绪':core.length?`下载基础文件（${size}）`:`下载全部可选文件（${size}）`;
  const m=lastStatus?.model||{};
  $('#download-speed').textContent=running&&m.speed>0?`${(m.speed/1e6).toFixed(1)} MB/s`:running?'正在测量速度…':'';
  $('#download-eta').textContent=running&&m.eta?`预计剩余 ${m.eta>=3600?Math.floor(m.eta/3600)+' 小时 ':''}${Math.ceil((m.eta%3600)/60)} 分钟`:'';
  $('#download-error').hidden=!m.error;$('#download-error').textContent=m.error||'';
 }
-$('#download-all').onclick=safe(async()=>{const keys=Object.entries(lastStatus?.components||{}).filter(([,item])=>!item.ready).map(([key])=>key);if(keys.length)await api('model/download',{components:keys});await refreshStatus()});
+$('#download-all').onclick=safe(async()=>{const keys=($('#download-all').dataset.components||'').split(',').filter(Boolean);if(keys.length)await api('model/download',{components:keys});await refreshStatus()});
 function promptDetails(meta){
  const details=document.createElement('details');details.className='prompt-details';
  const summary=document.createElement('summary');summary.textContent='生成详情';details.append(summary);

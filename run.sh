@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Start Qwen Image Studio on http://127.0.0.1:8765 (loopback only) and open it in the browser.
+# Start Studio for Qwen Image on http://127.0.0.1:8765 (loopback only) and open it in the browser.
 set -euo pipefail
 cd "$(dirname "$0")"
 [[ -x .venv/bin/python ]] || { echo 'Run ./setup.sh first.'; exit 1; }

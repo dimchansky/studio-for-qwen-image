@@ -102,5 +102,13 @@
  [
   "^可用内存仅 ([\\d.]+) GB，建议先关闭占用内存的应用。$",
   "Only $1 GB of memory is free. Close memory-heavy apps first."
+ ],
+ [
+  "^下载基础文件（(.+)）$",
+  "Download core files ($1)"
+ ],
+ [
+  "^下载全部可选文件（(.+)）$",
+  "Download all optional files ($1)"
  ]
 ]
