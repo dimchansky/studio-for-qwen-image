@@ -1,5 +1,5 @@
 """Loopback-only backend. No model code executes in the HTTP process."""
-import argparse, base64, contextlib, json, mimetypes, os, secrets, signal, sqlite3, subprocess, sys, threading, time, uuid
+import argparse, base64, contextlib, json, mimetypes, os, re, secrets, signal, sqlite3, subprocess, sys, threading, time, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, unquote
@@ -79,6 +79,29 @@ def read_session(sid):
             if jid in unmatched:unmatched.remove(jid)
     d['messages'].sort(key=lambda m:(users.get(m['meta'].get('job_id'),m)['created'],m['role']!='user',m['created']))
     return d
+
+def delete_session(sid,delete_images=False):
+    """Remove a chat and its job files; optionally its images that no other chat still uses."""
+    with LOCK:
+        if any(j['session_id']==sid and j['state'] in ('running','queued') for j in JOBS.values()): raise ValueError('请先停止这个会话中的任务。')
+        with connection() as c:
+            rows=c.execute('SELECT session_id,images,meta FROM messages').fetchall()
+            c.execute('DELETE FROM messages WHERE session_id=?',(sid,));c.execute('DELETE FROM sessions WHERE id=?',(sid,))
+        for jid in [jid for jid,j in JOBS.items() if j['session_id']==sid]: JOBS.pop(jid)
+    mine=[r for r in rows if r['session_id']==sid]
+    # "Continue editing" reuses a result as another chat's reference, so shared files must stay.
+    elsewhere={name for r in rows if r['session_id']!=sid for name in json.loads(r['images'])}
+    # Job inputs and logs contain the prompts, so they go with the chat.
+    for jid in {json.loads(r['meta']).get('job_id') for r in mine}:
+        if not isinstance(jid,str) or not re.fullmatch(r'[0-9A-Za-z_-]+',jid): continue
+        for f in (DATA/'jobs').glob(jid+'.*'): f.unlink(missing_ok=True)
+        (DATA/'images'/f'{jid}-preview.png').unlink(missing_ok=True)
+    deleted=[]
+    if delete_images:
+        for name in sorted({name for r in mine for name in json.loads(r['images'])}-elsewhere):
+            f=DATA/'images'/name
+            if Path(name).name==name and f.is_file(): f.unlink();deleted.append(name)
+    return {'ok':True,'deleted_images':deleted}
 
 def message(sid,role,content,images=None,meta=None):
     with connection() as c:
@@ -328,12 +351,7 @@ class Handler(BaseHTTPRequestHandler):
                 title={'en':'New chat','ru':'Новый чат'}.get(self.headers.get('X-Studio-Language'),'新会话')
                 with connection() as c: c.execute('INSERT INTO sessions VALUES(?,?,?,?)',(sid,title,time.time(),time.time()))
                 return self.send_json(read_session(sid))
-            if path=='/api/session/delete':
-                with LOCK:
-                    if any(j['session_id']==p['id'] and j['state'] in ('running','queued') for j in JOBS.values()): raise ValueError('请先停止这个会话中的任务。')
-                    with connection() as c:
-                        c.execute('DELETE FROM messages WHERE session_id=?',(p['id'],));c.execute('DELETE FROM sessions WHERE id=?',(p['id'],))
-                return self.send_json({'ok':True})
+            if path=='/api/session/delete': return self.send_json(delete_session(str(p['id']),p.get('delete_images') is True))
             if path=='/api/session/rename':
                 title=str(p['title']).strip()[:80]
                 if not title: raise ValueError('名称不能为空。')

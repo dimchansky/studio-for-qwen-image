@@ -110,5 +110,13 @@
  [
   "^下载全部可选文件（(.+)）$",
   "Download all optional files ($1)"
+ ],
+ [
+  "^将删除“(.*)”中的所有消息。$",
+  "All messages in “$1” will be deleted."
+ ],
+ [
+  "^会话已删除，同时删除了 (\\d+) 张图片$",
+  "Chat deleted along with $1 images"
  ]
 ]

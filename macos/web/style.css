@@ -176,3 +176,11 @@ textarea:focus-visible{background:transparent}
 .annotation-tools input[type=range]{width:90px;accent-color:var(--accent)}
 @media(max-width:650px){.eta-chip{margin-left:0}.diagnostic-row{grid-template-columns:1fr}}
 .memory-warning{margin-right:auto;color:#7a5b16}
+.session-row{position:relative;display:flex;align-items:center}
+.session-row .session{flex:1;min-width:0;padding-right:36px}
+.session-delete{position:absolute;right:3px;width:30px;height:30px;opacity:0;color:var(--muted);background:transparent}
+.session-row:hover .session-delete,.session-delete:focus-visible{opacity:1}
+.session-delete:hover{color:var(--error);background:transparent}
+.session-delete svg{width:16px;height:16px}
+@media(hover:none){.session-delete{opacity:1}}
+.delete-session-text{overflow-wrap:anywhere;font-size:13px}

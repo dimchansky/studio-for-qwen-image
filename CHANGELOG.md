@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Chats can be deleted from the sidebar (trash icon) or the chat menu. A confirmation dialog offers
+  to delete the chat's images too; images that another chat uses as references are kept. The chat's job
+  logs and inputs, which contain its prompts, are always removed.
+
 ## 3.0.0 — Studio for Qwen Image (2026-09-23)
 
 Fork of Qwen Studio 2.2.1 for Apple Silicon Macs with 32 GB of memory. See “What changed compared to

@@ -55,6 +55,8 @@ as `<image1>` … `<image10>`:
 - **Speed presets**: Turbo (4 steps), Standard (25), Quality (40), with a time estimate before you send.
 - Negative prompt and guidance, seeds, 1–4 images per job, queue, cancel, live preview, gallery,
   generation details, English/Russian/Chinese interface.
+- **Deleting chats** from the sidebar, optionally with their images (pictures another chat still uses
+  are kept).
 
 | Text rendering | Prompt enhancer | Turbo (4 steps) | Transparent PNG | Edit: before | Edit: after |
 |---|---|---|---|---|---|

@@ -62,7 +62,6 @@
  "会话名称": "Chat title",
  "删除会话": "Delete chat",
  "保存名称": "Save title",
- "删除会话会移除聊天记录，已保存的图片文件仍保留在本地。": "Deleting a chat removes its messages. Saved image files stay on this device.",
  "图片预览": "Image preview",
  "原始尺寸": "Actual size",
  "保存图片": "Save image",
@@ -101,7 +100,6 @@
  "图像模式": "Image mode",
  "对话模式": "Chat mode",
  "暂无图片": "No images yet",
- "确定删除这个会话及其聊天记录？": "Delete this chat and all its messages?",
  "下载进行中，完成或中断后可更改下载源。": "You can change the source after the download finishes or stops.",
  "更改下载源不会重新下载已完成的模型。": "Changing the source will not download a completed model again.",
  "更换来源会保留已下载的分段，完成后校验文件。": "Downloaded parts are kept when switching sources. Files are verified after downloading.",
@@ -447,5 +445,10 @@
  "必需，官方权重（GGUF Q8_0）": "Required, official weights (GGUF Q8_0)",
  "可选，社区修改版（GGUF Q8_0）": "Optional, community-modified weights (GGUF Q8_0)",
  "可选，“增强提示词”生成图片时需要": "Optional, enhances prompts for new images",
- "可选，“增强提示词”修改图片时需要": "Optional, enhances prompts for edits"
+ "可选，“增强提示词”修改图片时需要": "Optional, enhances prompts for edits",
+ "删除会话会移除聊天记录，也可以同时删除其中的图片。": "Deleting a chat removes its messages and, if you choose, its images.",
+ "同时删除这个会话中的图片": "Also delete this chat's images",
+ "在其他会话中用作参考图的图片会保留；已保存到“下载”文件夹的副本不受影响。": "Images used as references in other chats are kept; copies you saved to Downloads are not affected.",
+ "删除": "Delete",
+ "会话已删除": "Chat deleted"
 }
