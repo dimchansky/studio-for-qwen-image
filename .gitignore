@@ -27,3 +27,7 @@ dist/
 ._*
 .vscode/
 .idea/
+
+# Local runtime and model data (Qwen Image Studio M1 fork)
+.venv/
+data/

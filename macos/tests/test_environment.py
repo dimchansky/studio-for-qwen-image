@@ -1,4 +1,4 @@
-"""Preflight failures must block admission; optional chat must not block images."""
+"""Preflight failures must block admission."""
 import importlib.util
 from pathlib import Path
 import subprocess
@@ -8,19 +8,17 @@ import unittest
 spec=importlib.util.spec_from_file_location('studio_environment_probe',Path(__file__).resolve().parents[1]/'backend/environment_probe.py')
 probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
 
-class OfflineOllama:
-    def open(self,*a,**kw): raise OSError('offline')
-
 class EnvironmentChecks(unittest.TestCase):
     def collect(self,check):
         with tempfile.TemporaryDirectory() as data:
-            events=list(probe.collect(Path(data),check=check,opener=OfflineOllama()))
+            events=list(probe.collect(Path(data),check=check))
             return events,{x['id']:x for x in events}
-    def test_offline_chat_is_optional(self):
+    def test_all_checks_pass(self):
         events,items=self.collect(lambda name:'test version')
         self.assertTrue(probe.ready(items))
-        self.assertEqual(items['ollama']['state'],'optional')
-        self.assertFalse(items['ollama']['required'])
+        self.assertNotIn('ollama',items)
+        for name in ('gguf','sdnq','peft','mlx','mlx_vlm'):self.assertIn('package:'+name,items)
+        self.assertIn('enhancer',items)
         self.assertIn('dependencies',items)
         self.assertIn('pipeline',items)
         self.assertIn('gpu',items)

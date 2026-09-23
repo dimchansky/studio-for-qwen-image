@@ -5,9 +5,12 @@ The stock MPS path can materialize a full float32 Q×K score matrix. At 2K,
 ALL keys and values, preserving full-image attention and the official masks.
 This is unrelated to VAE/image tiling: pixels are still decoded as one image.
 """
+import os
+
 import torch
 
-SCORE_BUDGET = 128 * 1024 * 1024
+# Bytes of fp32 attention scores per slice; tune with QWEN_STUDIO_ATTN_BUDGET_MB.
+SCORE_BUDGET = int(float(os.environ.get('QWEN_STUDIO_ATTN_BUDGET_MB', '512')) * 1024 * 1024)
 
 def bounded_attention(dispatch, query, key, value, *, score_budget=SCORE_BUDGET, **kwargs):
     # Diffusers dispatch tensors are [batch, sequence, heads, channels].

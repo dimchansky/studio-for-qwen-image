@@ -1,85 +1,174 @@
-"""Disposable inference process. Its exit releases all CPU/MPS model allocations."""
-import json, math, os, secrets, sys, time, traceback
+"""Disposable diffusion process: GGUF transformer + VAE, embeddings from encode_worker.py.
+
+Denoises every requested image to latents first, frees the transformer, then decodes:
+a full-frame VAE decode needs ~9 GB extra at 1 MP even in fp16, which does not fit next
+to the transformer in 32 GB of unified memory. Exit releases all GPU allocations.
+"""
+import json
+import sys
+import time
+import traceback
 from pathlib import Path
-from generation_options import diffusion_kwargs
-p=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'));status=Path(p['status_path'])
-def report(**values):
-    state.update(values);tmp=status.with_suffix('.tmp');tmp.write_text(json.dumps(state), encoding='utf-8');tmp.replace(status)
-state={}
-try:
-    report(stage='正在加载模型',progress=0.01)
+
+from io_utils import atomic_json
+
+TURBO_WEIGHTS = 'Qwen-Image-2.1-viggle-turbo-4step-lora-r64.safetensors'
+PREVIEW_FRACTIONS = (.4, .7, .9)
+FULL_FRAME_PIXELS = 1_300_000  # larger outputs decode in overlapping tiles
+EXIT_RETRY_BF16 = 3
+
+
+class NonFinite(RuntimeError):
+    pass
+
+
+def decode(pipe, vae, latents, width, height, tile=None):
     import torch
-    from diffusers import QwenImage21Pipeline, AutoencoderKLQwenImage21
+    z = pipe._unpack_latents(latents.to(vae.device), height, width, pipe.vae_scale_factor).to(vae.dtype)
+    mean = torch.tensor(vae.config.latents_mean).view(1, -1, 1, 1, 1).to(z)
+    std = torch.tensor(vae.config.latents_std).view(1, -1, 1, 1, 1).to(z)
+    if tile:
+        vae.enable_tiling(tile, tile, tile - 128, tile - 128)
+    else:
+        vae.disable_tiling()
+    with torch.no_grad():
+        image = vae.decode(z * std + mean, return_dict=False)[0][:, :, 0]
+    return pipe.image_processor.postprocess(image.float(), output_type='pil')[0]
+
+
+def load_turbo(pipe, models, dtype):
+    import model_store
+    pipe.load_lora_weights(str(model_store.turbo_dir(models)), weight_name=TURBO_WEIGHTS, adapter_name='turbo')
+    for name, parameter in pipe.transformer.named_parameters():
+        if 'lora_' in name:
+            parameter.data = parameter.data.to(dtype)
+
+
+def run(p, report):
+    import torch
     from PIL import Image
-    device='mps' if torch.backends.mps.is_available() else ('cuda' if torch.cuda.is_available() else 'cpu')
-    if device=='cpu': raise RuntimeError('未检测到 GPU 加速，请检查 PyTorch 环境。')
-    # Load the original FP32 decoder directly; casting BF16 weights back to FP32 cannot recover precision.
-    vae=AutoencoderKLQwenImage21.from_pretrained(p['model_path'],subfolder='vae',torch_dtype=torch.float32,local_files_only=True)
-    pipe=QwenImage21Pipeline.from_pretrained(p['model_path'],vae=vae,torch_dtype=torch.bfloat16,local_files_only=True,low_cpu_mem_usage=True)
-    if device=='mps':
-        from mps_attention import install_mps_attention
-        install_mps_attention(pipe.transformer)
-    # Offload whole components, keeping the 8B encoder and 7B denoiser from occupying GPU memory together.
-    pipe.enable_model_cpu_offload(device=device)
-    # The 256px tiled decoder introduces green/purple seams, even on a constant gray field.
-    # Decode a complete image to preserve spatial context; never silently fall back to tiled output.
-    pipe.vae.disable_tiling()
-    if hasattr(pipe.vae,'disable_slicing'):pipe.vae.disable_slicing()
-    pipe.set_progress_bar_config(disable=True)
-    seed=p.get('seed',-1);seed=secrets.randbelow(2**32) if seed<0 else seed
-    prompt=p['prompt']
-    if p.get('transparent'): prompt='This is an RGBA image with transparency. '+prompt+' The image has alpha channel and the background is transparent.'
-    refs=[Image.open(Path(p['data'])/'images'/x).copy() for x in p.get('images',[])]
-    latest_prediction={}
-    batch_index=0;count=p.get('count',1)
-    def remember_prediction(_module,_args,output):
-        latest_prediction['noise']=output[0].detach()[:, -(p['width']//16)*(p['height']//16):]
-    preview_hook=pipe.transformer.register_forward_hook(remember_prediction)
-    preview_steps={max(1,round(p['steps']*fraction)) for fraction in (.4,.7,.9)}
-    def preview(_pipe,latents,index):
-        z=_pipe._unpack_latents(latents.detach(),p['height'],p['width'],_pipe.vae_scale_factor).float()
-        # Preserve the latent grid: resizing latent channels creates colored artifacts.
-        # Decode first, then resize the resulting image for the lightweight preview.
-        mean=torch.tensor(_pipe.vae.config.latents_mean,device=z.device).view(1,-1,1,1,1)
-        std=torch.tensor(_pipe.vae.config.latents_std,device=z.device).view(1,-1,1,1,1)
-        decoded=_pipe.vae.decode((z*std+mean).to(_pipe.vae.dtype),return_dict=False)[0][:,:,0]
-        im=_pipe.image_processor.postprocess(decoded,output_type='pil')[0]
-        im.thumbnail((384,384),Image.Resampling.LANCZOS)
-        name=p['job_id']+'-preview.png';target=Path(p['data'])/'images'/name;temp=target.with_suffix('.tmp')
-        im.save(temp,format='PNG');temp.replace(target)
-        del decoded,z
-        for hook in getattr(_pipe,'_all_hooks',[]):
-            if hook.model is _pipe.vae:hook.offload();break
-        report(preview=name,preview_step=batch_index*p['steps']+index)
-    def step(_pipe,i,t,kwargs):
-        report(stage=f'正在生成 {i+1} / {p["steps"]}',progress=.08+.87*(batch_index+(i+1)/p['steps'])/count)
-        if i+1 in preview_steps and p['steps']>=10 and p.get('cfg',1)==1:
-            try:
-                z=kwargs['latents']
-                sigma=_pipe.scheduler.sigmas[i+1].to(z)
-                # Estimate the clean image from the flow velocity, rather than showing noisy latents.
-                preview(_pipe,z-sigma*latest_prediction['noise'],i+1)
-            except Exception: traceback.print_exc()
-        return kwargs
-    report(stage='正在理解画面',progress=.06,seed=seed)
     from PIL.PngImagePlugin import PngInfo
-    images=[];seeds=[]
-    # Reuse loaded weights, but render one image at a time to keep peak memory bounded.
-    for batch_index in range(count):
-        image_seed=(seed+batch_index)%(2**32);seeds.append(image_seed)
-        kwargs=diffusion_kwargs(p,prompt)
-        kwargs.update(generator=torch.Generator('cuda' if device=='cuda' else 'cpu').manual_seed(image_seed),callback_on_step_end=step)
-        if refs:kwargs['image']=refs if len(refs)>1 else refs[0]
-        result=pipe(**kwargs).images[0]
-        report(stage='正在保存图片',progress=.08+.87*(batch_index+1)/count)
-        metadata=PngInfo();metadata.add_text('qwen_studio',json.dumps({**{k:p.get(k) for k in ('width','height','steps','transparent','negative_prompt','cfg')},'prompt':prompt,'seed':image_seed,'decoder':'full-frame-fp32'},ensure_ascii=False))
-        name=p['job_id']+(f'-{batch_index+1}' if count>1 else '')+'.png'
-        result.save(Path(p['data'])/'images'/name,pnginfo=metadata);images.append(name)
-        report(completed_images=list(images),batch_index=batch_index+1,batch_count=count)
-    preview_hook.remove()
-    report(stage='完成',progress=1,image=images[0],images=images,seed=seed,seeds=seeds,effective_prompt=prompt)
-except Exception as e:
-    traceback.print_exc()
-    error=str(e)
-    if 'out of memory' in error.lower(): error='内存不足。请关闭其他大型应用，将图片尺寸降至 512，再重试。\n'+error[:300]
-    report(error=error,stage='生成失败');sys.exit(1)
+    import model_loader
+    import staged_pipeline
+    from mps_attention import install_mps_attention
+
+    models, data = Path(p['models']), Path(p['data'])
+    dtype = model_loader.DTYPES[p.get('dtype', 'fp16')]
+    width, height, steps, count = p['width'], p['height'], p['steps'], p.get('count', 1)
+    report(stage='正在加载图像模型', progress=.02)
+    started = time.time()
+    transformer = model_loader.transformer(models, p.get('variant', 'official'), dtype)
+    vae = model_loader.vae(models)
+    pipe = model_loader.pipeline(models, transformer=transformer, vae=vae, turbo=p.get('turbo', False))
+    if p.get('turbo'):
+        load_turbo(pipe, models, dtype)
+    install_mps_attention(pipe.transformer)
+    # References are VAE-encoded in fp32 (the pipeline casts pixels to the embedding dtype first).
+    encode_vae = pipe._encode_vae_image
+    pipe._encode_vae_image = lambda image, generator: encode_vae(image.to(vae.dtype), generator).to(dtype)
+    packet = torch.load(p['embeds_path'])
+    references = [Image.open(data / 'images' / name).copy() for name in p.get('images', [])]
+    arguments = staged_pipeline.call_arguments(p['prompt'], references, p.get('negative_prompt', ''), p.get('cfg', 1),
+                                               width, height, p['reference_resolution'])
+    report(load_seconds=round(time.time() - started, 1))
+
+    previews_on = p.get('previews', True) and steps >= 10 and p.get('cfg', 1) <= 1
+    preview_steps = {max(1, round(steps * fraction)) for fraction in PREVIEW_FRACTIONS}
+    prediction = {}
+    if previews_on:
+        pipe.transformer.register_forward_hook(
+            lambda _module, _args, output: prediction.update(velocity=output[0].detach()[:, -(width // 16) * (height // 16):]))
+    timings, latents_list, seeds = [], [], []
+    batch = 0
+
+    def preview(latents, index):
+        sigma = pipe.scheduler.sigmas[index].to(latents)
+        # Flow matching: the clean image estimate is x_t - sigma_t * v.
+        image = decode(pipe, vae, latents - sigma * prediction['velocity'], width, height, tile=384)
+        image.thumbnail((384, 384), Image.Resampling.LANCZOS)
+        name = f"{p['job_id']}-preview.png"
+        target = data / 'images' / name
+        temporary = target.with_suffix('.tmp')
+        image.save(temporary, format='PNG')
+        temporary.replace(target)
+        report(preview=name, preview_step=batch * steps + index)
+
+    peak = [0]
+
+    def sample_memory():
+        peak[0] = max(peak[0], torch.mps.driver_allocated_memory())
+
+    def step(_pipe, i, _t, kwargs):
+        latents = kwargs['latents']
+        if not torch.isfinite(latents).all():
+            raise NonFinite('non-finite latents')
+        torch.mps.synchronize()
+        sample_memory()
+        timings.append(time.time())
+        report(stage=f'正在生成 {i + 1} / {steps}', progress=.05 + .85 * (batch + (i + 1) / steps) / count)
+        if previews_on and i + 1 in preview_steps and i + 1 < steps:
+            try:
+                preview(latents, i + 1)
+            except Exception:
+                traceback.print_exc()
+        return kwargs
+
+    denoise_started = time.time()
+    for batch in range(count):
+        seed = (p['seed'] + batch) % 2**32
+        seeds.append(seed)
+        staged_pipeline.inject(pipe, packet, dtype)
+        timings.append(time.time())
+        with torch.no_grad():
+            latents = pipe(**arguments, num_inference_steps=steps, use_kv_cache=p.get('use_kv_cache', True),
+                           generator=torch.Generator('cpu').manual_seed(seed), callback_on_step_end=step,
+                           output_type='latent').images
+        latents_list.append(latents.cpu())
+    step_seconds = round((time.time() - denoise_started) / (steps * count), 2)
+    report(stage='正在解码图片', progress=.92, step_seconds=step_seconds, denoise_peak_gb=round(peak[0] / 1024**3, 2))
+
+    # Free the transformer before the full-frame decode.
+    pipe.transformer = None
+    del transformer
+    model_loader.free()
+    vae.to(torch.float16)
+    tile = None if width * height <= FULL_FRAME_PIXELS else 768
+    names = []
+    settings = {key: p.get(key) for key in ('width', 'height', 'steps', 'cfg', 'negative_prompt', 'transparent',
+                                             'variant', 'turbo', 'dtype', 'reference_resolution')}
+    for index, latents in enumerate(latents_list):
+        image = decode(pipe, vae, latents, width, height, tile)
+        sample_memory()
+        metadata = PngInfo()
+        metadata.add_text('qwen_studio', json.dumps({**settings, 'prompt': p['prompt'], 'seed': seeds[index]},
+                                                    ensure_ascii=False))
+        name = p['job_id'] + (f'-{index + 1}' if count > 1 else '') + '.png'
+        image.save(data / 'images' / name, pnginfo=metadata)
+        names.append(name)
+        report(stage='正在保存图片', progress=.92 + .08 * (index + 1) / count, completed_images=list(names))
+    report(stage='完成', progress=1, image=names[0], images=names, seeds=seeds, step_seconds=step_seconds,
+           seconds=round(time.time() - started, 1), peak_gb=round(peak[0] / 1024**3, 2))
+
+
+if __name__ == '__main__':
+    p = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+    status = Path(p['status_path'])
+    state = {}
+
+    def report(**values):
+        state.update(values)
+        atomic_json(status, state)
+
+    try:
+        run(p, report)
+    except NonFinite:
+        traceback.print_exc()
+        report(retry_dtype='bf16', stage='正在切换精度')
+        sys.exit(EXIT_RETRY_BF16)
+    except Exception as error:
+        traceback.print_exc()
+        message = str(error)
+        if 'out of memory' in message.lower() or 'mtlbuffer' in message.lower():
+            message = '内存不足。请关闭其他大型应用，或选择较小的尺寸、较少的参考图，再重试。\n' + message[:300]
+        report(error=message, stage='生成失败')
+        sys.exit(1)

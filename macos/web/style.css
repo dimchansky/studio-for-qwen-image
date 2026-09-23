@@ -148,3 +148,31 @@ textarea:focus-visible{background:transparent}
 .annotation-stage{display:flex;justify-content:center;background:#f5f5f5;border-radius:18px;overflow:hidden;padding:8px}
 #annotation-canvas{display:block;max-width:100%;max-height:53dvh;width:auto;height:auto;touch-action:none;cursor:crosshair;border-radius:10px}
 #image-viewer .viewer-toolbar{flex-wrap:wrap}
+/* Qwen Image Studio (M1 Max fork): model version and speed switches, estimates, model files, templates. */
+.workspace:not(.empty) .mode-row,.mode-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:6px}
+.eta-chip{margin-left:auto;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.reference-plan{margin:8px 2px 0;font-size:11px;color:#7a5b16;background:#fbf4e3;border-radius:9px;padding:6px 10px}
+.warning-text{font-size:11px;color:#7a5b16;background:#fbf4e3;border-radius:9px;padding:7px 10px;margin:-10px 0 14px}
+#variant-switch [data-variant=uc].active{color:#8a3b12}
+.component-row{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:16px}
+.component-row strong,.component-row .component-note,.component-row .component-detail,.component-row progress{grid-column:1}
+.component-row .component-note,.component-row .component-detail{margin:2px 0}
+.component-row .text-button{grid-column:2;grid-row:1/span 4;align-self:center;white-space:nowrap}
+#download-all{margin-top:14px}
+.diagnostics{display:grid;gap:6px;margin-top:12px}
+.diagnostic-row{display:grid;grid-template-columns:92px 170px 1fr;gap:10px;align-items:baseline;font-size:12px;padding:6px 10px;border-radius:10px;background:#f6f6f6}
+.diagnostic-row .muted{overflow-wrap:anywhere;line-height:1.5}
+.diagnostic-state{font-size:11px;font-weight:600}
+.diagnostic-row.pass .diagnostic-state{color:#2f6b45}.diagnostic-row.fail .diagnostic-state{color:var(--error)}.diagnostic-row.optional .diagnostic-state{color:var(--muted)}
+#templates-dialog{width:720px}
+.template-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:16px;max-height:60vh;overflow:auto;padding:2px}
+.template-card{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;padding:13px 14px;border-radius:14px;background:#f6f6f6;min-height:96px}
+.template-card:hover{background:#ececec}
+.template-card strong{font-weight:500;font-size:13px}
+.template-card .muted{line-height:1.5}
+.template-images{margin-top:auto;font-size:10px;color:var(--muted);background:#fff;border-radius:7px;padding:2px 7px}
+.annotation-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.annotation-tools label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.annotation-tools input[type=range]{width:90px;accent-color:var(--accent)}
+@media(max-width:650px){.eta-chip{margin-left:0}.diagnostic-row{grid-template-columns:1fr}}
+.memory-warning{margin-right:auto;color:#7a5b16}

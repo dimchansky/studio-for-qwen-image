@@ -29,7 +29,11 @@ def messages_for(checkpoint,prompt,images):
 
 def reference_image(path,max_pixels):
     from PIL import Image
-    with Image.open(path) as source:image=source.convert('RGB')
+    with Image.open(path) as source:
+        # Like the image pipeline's text encoder, the enhancer sees transparency composited over white.
+        if 'A' in source.getbands() or 'transparency' in source.info:
+            rgba=source.convert('RGBA');image=Image.new('RGB',rgba.size,(255,255,255));image.paste(rgba,mask=rgba.getchannel('A'))
+        else:image=source.convert('RGB')
     if image.width*image.height>max_pixels:
         scale=(max_pixels/(image.width*image.height))**.5
         image=image.resize((max(1,int(image.width*scale)),max(1,int(image.height*scale))),Image.Resampling.LANCZOS)
@@ -54,27 +58,30 @@ def parse_output(text):
     if result is None:raise ValueError('提示词增强未返回完整结果，请重试。')
     return result
 
-def apply_presence(scores,token_ids,prompt_length,penalty):
-    # Presence is an additive penalty on generated tokens only, not repetition.
-    for row in range(token_ids.shape[0]):
-        generated=token_ids[row,prompt_length:]
-        if generated.numel():scores[row,generated.unique()]-=penalty
-    return scores
+def enhance_mlx(checkpoint,messages,profile,seed,report,thinking_budget=3072,images=()):
+    """Run the PE checkpoint with mlx-vlm using the official sampling profile.
 
-def enhance(model,processor,messages,profile,seed):
-    import torch
-    from transformers import LogitsProcessor, LogitsProcessorList
-    with torch.inference_mode():
-        tokens=processor.apply_chat_template(messages,enable_thinking=True,add_generation_prompt=True,
-            tokenize=True,return_dict=True,return_tensors='pt').to(model.device)
-        if 'mm_token_type_ids' not in tokens and hasattr(processor,'create_mm_token_type_ids'):
-            tokens['mm_token_type_ids']=processor.create_mm_token_type_ids(tokens['input_ids'])
-        prefix=tokens['input_ids'].shape[1]
-        class Presence(LogitsProcessor):
-            def __call__(self,input_ids,scores):return apply_presence(scores,input_ids,prefix,profile.presence_penalty)
-        processors=LogitsProcessorList([Presence()] if profile.presence_penalty else [])
-        torch.manual_seed(seed)
-        output=model.generate(**tokens,max_new_tokens=profile.max_new_tokens,do_sample=True,
+    Thinking is capped: after `thinking_budget` tokens mlx-vlm forces the closing tag so
+    the answer is always produced on a slow machine (the official limit is 16k–24k tokens).
+    """
+    import time
+    import mlx.core as mx
+    from mlx_vlm import load, stream_generate
+    model,processor=load(str(checkpoint))
+    # mlx-vlm renders templates with enable_thinking=False by default; the PE requires thinking.
+    prompt=processor.apply_chat_template(messages,tokenize=False,add_generation_prompt=True,enable_thinking=True)
+    if not prompt.rstrip().endswith('<think>'):raise ValueError('提示词增强模板未开启思考模式。')
+    thinking_budget=min(thinking_budget,profile.max_new_tokens)
+    max_tokens=min(profile.max_new_tokens,thinking_budget+4096)
+    mx.random.seed(seed)
+    text='';answer=False;last=0.0
+    for response in stream_generate(model,processor,prompt,image=list(images) or None,max_tokens=max_tokens,
             temperature=profile.temperature,top_p=profile.top_p,top_k=profile.top_k,min_p=profile.min_p,
-            logits_processor=processors,pad_token_id=processor.tokenizer.eos_token_id)
-        return parse_output(processor.tokenizer.decode(output[0,prefix:],skip_special_tokens=True))
+            presence_penalty=profile.presence_penalty or None,presence_context_size=max_tokens,
+            enable_thinking=True,thinking_budget=thinking_budget):
+        text+=response.text;answer=answer or '</think>' in text
+        if time.time()-last>.5:
+            last=time.time()
+            report(pe_tokens=response.generation_tokens,pe_tps=round(response.generation_tps,1),pe_phase='answer' if answer else 'thinking')
+    # The template pre-fills the opening tag, so only the closing tag appears in the output.
+    return parse_output(text)

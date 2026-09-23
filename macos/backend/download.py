@@ -1,73 +1,88 @@
-"""Selectable official sources, resumable parallel downloads and SHA-256 checks."""
-import concurrent.futures, fcntl, hashlib, json, os, subprocess, sys
+"""Download pinned model components one file at a time, verifying size and SHA-256.
+
+Usage: download.py <models_dir> <component> [<component> ...]
+
+Each file lands in DATA/models/.staging first and is moved into place only after
+verification, so disk usage never exceeds the finished files plus one file in flight.
+"""
+import fcntl
+import hashlib
+import json
+import os
+import shutil
+import sys
+import time
 from pathlib import Path
-from model_sources import download_url, validate_source
-source=validate_source(sys.argv[2] if len(sys.argv)>2 else 'modelscope')
-root=Path(sys.argv[1]);root.mkdir(parents=True,exist_ok=True)
-lock=(root/'.download.lock').open('w')
-try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-except BlockingIOError:print('Download already running',flush=True);sys.exit(0)
-(root/'.download.pid').write_text(str(os.getpid()), encoding='utf-8')
-(root/'.download-source').write_text(source, encoding='utf-8')
-target=sys.argv[3] if len(sys.argv)>3 else 'image'
-if target not in ('image','pe-t2i','pe-i2i'):raise ValueError('Unknown model target')
-files=json.loads(Path(__file__).with_name('model-files.json' if target=='image' else target+'-files.json').read_text(encoding='utf-8'))
-def digest(p):
- h=hashlib.sha256()
- with p.open('rb') as f:
-  for b in iter(lambda:f.read(8*1024*1024),b''):h.update(b)
- return h.hexdigest()
-def url(item):return download_url(item,source)
-def chunk_download(task):
- item,start,end,path=task;size=end-start+1
- tmp=Path(str(path)+'.receiving')
- for attempt in range(6):
-  # Preserve a partial network response from an interrupted process before resuming.
-  if tmp.exists():
-   previous=path.stat().st_size if path.exists() else 0
-   if previous+tmp.stat().st_size<=size:
-    with path.open('ab') as out,tmp.open('rb') as src:
-     for b in iter(lambda:src.read(8*1024*1024),b''):out.write(b)
-   tmp.unlink()
-  offset=path.stat().st_size if path.exists() else 0
-  if offset==size:return
-  if offset>size:path.unlink();offset=0
-  result=subprocess.run(['/usr/bin/curl','--fail','--location','--connect-timeout','20','--max-time','900','--range',f'{start+offset}-{end}','--output',str(tmp),'--silent','--show-error',url(item)])
-  if result.returncode==0 and tmp.stat().st_size!=size-offset:
-   tmp.unlink();raise RuntimeError('下载源未正确返回文件分段。请重试。')
- # Retain partial responses for the next resume.
- raise RuntimeError('分段下载暂时失败，请点击继续下载重试。')
-plans=[];tasks=[]
-for item in files:
- dest=root/item['path'];dest.parent.mkdir(parents=True,exist_ok=True)
- if dest.exists() and dest.stat().st_size==item['size'] and digest(dest)==item['sha256']:
-  print('Verified',item['path'],flush=True);continue
- part=dest.with_suffix(dest.suffix+'.part');offset=part.stat().st_size if part.exists() else 0
- if offset>item['size']:part.unlink();offset=0
- chunks=[]
- for start in range(offset,item['size'],128*1024*1024):
-  end=min(start+128*1024*1024,item['size'])-1
-  path=dest.with_name(dest.name+f'.chunk-{start}-{end}')
-  tasks.append((item,start,end,path));chunks.append(path)
- plans.append((item,dest,part,chunks))
-try:
- with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:list(pool.map(chunk_download,tasks))
- for item,dest,part,chunks in plans:
-  assembled=dest.with_suffix(dest.suffix+'.assembling')
-  sources=([part] if part.exists() else [])+chunks
-  with assembled.open('wb') as out:
-   for ch in sources:
-    with ch.open('rb') as src:
-     for b in iter(lambda:src.read(8*1024*1024),b''):out.write(b)
-  if assembled.stat().st_size!=item['size'] or digest(assembled)!=item['sha256']:
-   assembled.unlink(missing_ok=True);part.unlink(missing_ok=True)
-   for ch in chunks:ch.unlink(missing_ok=True)
-   raise RuntimeError('校验失败，请重试：'+item['path'])
-  assembled.replace(dest)
-  for ch in sources:ch.unlink(missing_ok=True)
-  print('Completed',item['path'],flush=True)
- (root/'.verified').write_text(f'{source}: all official model files SHA-256 verified\n', encoding='utf-8')
- print('Model ready',flush=True)
-finally:
- (root/'.download.pid').unlink(missing_ok=True)
- lock.close()
+
+from model_store import MANIFEST, STAGING, files, marker, ready, reserve_bytes
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as stream:
+        for block in iter(lambda: stream.read(16 * 1024 * 1024), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def fetch(models, item):
+    from huggingface_hub import hf_hub_download
+    dest = models / item['dest']
+    if dest.is_file() and dest.stat().st_size == item['size'] and sha256(dest) == item['sha256']:
+        print('Verified', item['dest'], flush=True)
+        return
+    free = shutil.disk_usage(models).free
+    if free < item['size'] + reserve_bytes():
+        raise RuntimeError(f"Not enough disk space for {item['dest']}: {free / 1e9:.1f} GB free, "
+                           f"{(item['size'] + reserve_bytes()) / 1e9:.1f} GB needed (file + reserve).")
+    staging = models / STAGING / item['repo'].replace('/', '--')
+    print('Downloading', item['repo'], item['path'], f"({item['size'] / 1e9:.2f} GB)", flush=True)
+    for attempt in range(1, 4):
+        try:
+            got = Path(hf_hub_download(item['repo'], item['path'], revision=item['revision'], local_dir=staging))
+            break
+        except Exception as error:
+            if attempt == 3:
+                raise
+            print(f'Retry {attempt}: {error}', flush=True)
+            time.sleep(5 * attempt)
+    if got.stat().st_size != item['size'] or sha256(got) != item['sha256']:
+        got.unlink(missing_ok=True)
+        raise RuntimeError(f"Checksum mismatch for {item['repo']}/{item['path']}; the file was discarded.")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(got, dest)
+    print('Completed', item['dest'], flush=True)
+
+
+def main():
+    models = Path(sys.argv[1])
+    components = sys.argv[2:]
+    unknown = [key for key in components if key not in MANIFEST]
+    if not components or unknown:
+        raise SystemExit(f'Usage: download.py <models_dir> <component>...; unknown: {unknown}')
+    models.mkdir(parents=True, exist_ok=True)
+    lock = (models / '.download.lock').open('w')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print('Download already running', flush=True)
+        return
+    (models / '.download.json').write_text(json.dumps({'pid': os.getpid(), 'components': components}), encoding='utf-8')
+    try:
+        for key in components:
+            if ready(models, key):
+                print('Ready', key, flush=True)
+                continue
+            for item in files(key):
+                fetch(models, item)
+            marker(models, key).parent.mkdir(parents=True, exist_ok=True)
+            marker(models, key).write_text(json.dumps({'verified': time.time(), 'files': files(key)}), encoding='utf-8')
+            print('Component ready', key, flush=True)
+        shutil.rmtree(models / STAGING, ignore_errors=True)
+    finally:
+        (models / '.download.json').unlink(missing_ok=True)
+        lock.close()
+
+
+if __name__ == '__main__':
+    main()

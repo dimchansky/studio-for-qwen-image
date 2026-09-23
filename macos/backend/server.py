@@ -1,31 +1,40 @@
-"""Loopback-only desktop backend. No model code executes in the HTTP process."""
+"""Loopback-only backend. No model code executes in the HTTP process."""
 import argparse, base64, contextlib, json, mimetypes, os, secrets, signal, sqlite3, subprocess, sys, threading, time, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, unquote
-from urllib.request import Request, urlopen
-from model_sources import SOURCES, validate_source
+import psutil
+import model_store
+import perf
 from environment_probe import is_environment_error
-from enhancer_assets import EnhancerAssets, TARGETS
-from generation_options import validate_options, resolve_size, exact_text, protect_text
+from generation_options import apply_preset, plan_references, validate_options
 from image_jobs import run_image_job
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get('QWEN_STUDIO_DATA', str(Path.home() / 'Library/Application Support/Qwen Studio')))
-MODEL = DATA / 'models/Qwen-Image-2.1'
-for p in [DATA, DATA/'images', DATA/'jobs', MODEL]: p.mkdir(parents=True, exist_ok=True)
-TOKEN = os.environ.get('QWEN_STUDIO_TOKEN') or secrets.token_urlsafe(32)
+MODELS = DATA / 'models'
+for p in [DATA, DATA/'images', DATA/'jobs', MODELS]: p.mkdir(parents=True, exist_ok=True)
+
+def studio_token():
+    # A stable token keeps an open browser tab working across server restarts.
+    if os.environ.get('QWEN_STUDIO_TOKEN'): return os.environ['QWEN_STUDIO_TOKEN']
+    path=DATA/'.token'
+    with contextlib.suppress(OSError):
+        value=path.read_text(encoding='utf-8').strip()
+        if len(value)>=32: return value
+    value=secrets.token_urlsafe(32)
+    path.write_text(value,encoding='utf-8');path.chmod(0o600)
+    return value
+
+TOKEN = studio_token()
 DB = DATA/'sessions.sqlite3'
 LOCK = threading.RLock()
 JOBS = {}
-DOWNLOAD_SAMPLES = []
-CHAT_CAPS = {}
 ACTIVE = None
 QUEUE = []
 STOPPING = False
-DOWNLOAD = None
-ENHANCERS = EnhancerAssets(MODEL.parent, DATA)
-REVISION = 'b3179ad355be050328e483a9dfdd9e60cd62adfa'
+DOWNLOADS = {'process':None,'current':[],'pending':[],'error':'','samples':[]}
+LANGUAGES = ('auto','zh','en','ru')
 
 def connection():
     c = sqlite3.connect(DB); c.row_factory = sqlite3.Row; return c
@@ -34,28 +43,20 @@ with connection() as c:
     c.execute('CREATE TABLE IF NOT EXISTS preferences(key TEXT PRIMARY KEY,value TEXT)')
 
 def preferences(values=None):
-    defaults={'welcome_language':'zh','welcome_cycle':True,'download_source':None,'interface_language':'auto'}
+    defaults={'welcome_language':'zh','welcome_cycle':True,'interface_language':'auto','transformer_variant':'official','preset':'standard','thinking_budget':3072}
     with connection() as c:
         if values is not None:
             if not isinstance(values,dict) or set(values)-set(defaults): raise ValueError('未知设置。')
-            if 'welcome_language' in values and values['welcome_language'] not in ('auto','zh','en'): raise ValueError('不支持的语言。')
-            if 'interface_language' in values and values['interface_language'] not in ('auto','zh','en'): raise ValueError('不支持的语言。')
+            for key in ('welcome_language','interface_language'):
+                if key in values and values[key] not in LANGUAGES: raise ValueError('不支持的语言。')
             if 'welcome_cycle' in values and not isinstance(values['welcome_cycle'],bool): raise ValueError('轮换设置须为开关。')
-            if 'download_source' in values: validate_source(values['download_source'])
+            if 'transformer_variant' in values and values['transformer_variant'] not in model_store.VARIANTS: raise ValueError('未知的模型版本。')
+            if 'preset' in values and values['preset'] not in ('turbo','standard','quality','custom'): raise ValueError('未知的速度模式。')
+            if 'thinking_budget' in values and values['thinking_budget'] not in (1024,3072,8192,24000): raise ValueError('不支持的思考长度。')
             for key,value in values.items(): c.execute('INSERT OR REPLACE INTO preferences VALUES(?,?)',(key,json.dumps(value)))
         for row in c.execute('SELECT key,value FROM preferences'):
             if row['key'] in defaults: defaults[row['key']]=json.loads(row['value'])
-    language_file=DATA/'ui-language.txt'
-    if values and 'interface_language' in values:
-        temporary=DATA/('ui-language-'+uuid.uuid4().hex+'.tmp')
-        try:
-            temporary.write_text(values['interface_language'],encoding='utf-8')
-            temporary.replace(language_file)
-        finally:
-            temporary.unlink(missing_ok=True)
-    if language_file.exists():
-        chosen=language_file.read_text(encoding='utf-8-sig').strip()
-        if chosen in ('auto','zh','en'):defaults['interface_language']=chosen
+    if defaults['interface_language'] not in LANGUAGES: defaults['interface_language']='auto'
     return defaults
 
 def read_session(sid):
@@ -79,111 +80,93 @@ def read_session(sid):
     d['messages'].sort(key=lambda m:(users.get(m['meta'].get('job_id'),m)['created'],m['role']!='user',m['created']))
     return d
 
-def chat_history(sid,current_id,prompt):
-    history=read_session(sid)['messages']
-    completed={m['meta'].get('job_id') for m in history if m['role']=='assistant' and not m['meta'].get('error') and not m['meta'].get('cancelled')}
-    result=[]
-    for m in history:
-        meta=m['meta'];jid=meta.get('job_id')
-        if meta.get('error') or meta.get('cancelled') or jid==current_id:continue
-        if jid and jid not in completed:continue
-        result.append({'role':m['role'],'content':m['content']})
-    return result[-24:]+[{'role':'user','content':prompt}]
-
 def message(sid,role,content,images=None,meta=None):
     with connection() as c:
         c.execute('INSERT INTO messages VALUES(?,?,?,?,?,?,?)',(uuid.uuid4().hex,sid,role,content,json.dumps(images or []),json.dumps(meta or {}),time.time()))
         c.execute('UPDATE sessions SET updated=? WHERE id=?',(time.time(),sid))
 
-def ollama(path, body=None, timeout=10):
-    data=json.dumps(body).encode() if body is not None else None
-    req=Request('http://127.0.0.1:11434'+path,data=data,headers={'Content-Type':'application/json'})
-    return urlopen(req,timeout=timeout)
+# ---- Model downloads: one download.py process at a time, later requests queue behind it.
 
-def model_status():
-    manifest=ROOT/'backend/model-files.json'
-    files=json.loads(manifest.read_text(encoding='utf-8'))
-    total=sum(x['size'] for x in files)
-    done=sum(min((MODEL/x['path']).stat().st_size,x['size']) for x in files if (MODEL/x['path']).is_file())
-    partial=sum(x.stat().st_size for x in MODEL.rglob('*') if x.is_file() and (x.name.endswith('.part') or '.chunk-' in x.name or x.name.endswith('.receiving')))
-    ready=(MODEL/'.verified').is_file() and all((MODEL/x['path']).is_file() and (MODEL/x['path']).stat().st_size==x['size'] for x in files)
-    running=DOWNLOAD is not None and DOWNLOAD.poll() is None
-    try:
-        pid=int((MODEL/'.download.pid').read_text(encoding='utf-8'));os.kill(pid,0);running=True
-    except (OSError,ValueError): pass
-    log=DATA/'download.log'
-    error=''
-    if not running and DOWNLOAD is not None and DOWNLOAD.poll() not in (None,0):
-        error='下载中断。点击继续下载可重试；已完成的分段会保留。详情见本地目录的 download.log。'
-    current=min(done+partial,total)
+def downloading():
+    process=DOWNLOADS['process']
+    return process is not None and process.poll() is None
+
+def start_next_download():
+    if downloading() or STOPPING or not DOWNLOADS['pending']: return
+    DOWNLOADS['current']=DOWNLOADS['pending'][:];DOWNLOADS['pending'].clear();DOWNLOADS['error']='';DOWNLOADS['samples'].clear()
+    env={**os.environ,'HF_HUB_DISABLE_TELEMETRY':'1','HF_XET_CHUNK_CACHE_SIZE_BYTES':os.environ.get('HF_XET_CHUNK_CACHE_SIZE_BYTES','0'),'HF_HOME':os.environ.get('HF_HOME',str(DATA/'hf-home'))}
+    with (DATA/'download.log').open('a') as log:
+        DOWNLOADS['process']=subprocess.Popen([sys.executable,'-u',str(ROOT/'backend/download.py'),str(MODELS),*DOWNLOADS['current']],stdout=log,stderr=log,env=env,start_new_session=True)
+    threading.Thread(target=watch_download,args=(DOWNLOADS['process'],),daemon=True).start()
+
+def watch_download(process):
+    process.wait()
     with LOCK:
-        now=time.monotonic()
-        DOWNLOAD_SAMPLES.append((now,current))
-        while len(DOWNLOAD_SAMPLES)>1 and DOWNLOAD_SAMPLES[0][0]<now-15: DOWNLOAD_SAMPLES.pop(0)
-        elapsed=now-DOWNLOAD_SAMPLES[0][0]
-        speed=max(0,(current-DOWNLOAD_SAMPLES[0][1])/elapsed) if elapsed>1 else 0
-    eta=(total-current)/speed if speed>1024 and not ready else None
-    source=preferences()['download_source']
-    if running:
-        try: source=validate_source((MODEL/'.download-source').read_text(encoding='utf-8').strip())
-        except (OSError,ValueError): source='modelscope'
-    return {'ready':ready,'downloading':running,'bytes':current,'total':total,'speed':speed,'eta':eta,'verifying':current>=total and not ready and running,'path':str(MODEL),'error':error,'source':source,'sources':SOURCES}
+        if process.returncode not in (0,-signal.SIGTERM):
+            tail=''
+            with contextlib.suppress(OSError):
+                tail=(DATA/'download.log').read_text(encoding='utf-8',errors='replace').strip().splitlines()[-1][:300]
+            DOWNLOADS['error']='下载中断。点击继续下载可重试；已完成的文件会保留。'+('\n'+tail if tail else '')
+        DOWNLOADS['current']=[]
+        start_next_download()
 
-def chat_capabilities(name):
-    if name in CHAT_CAPS:return CHAT_CAPS[name]
-    try:
-        with ollama('/api/show',{'model':name}) as r: info=json.load(r)
-        options=[]
-        if 'thinking' in info.get('capabilities',[]):
-            if info.get('details',{}).get('family')=='gptoss':
-                options=[{'value':'low','label':'轻度'},{'value':'medium','label':'标准'},{'value':'high','label':'深入'}]
-            else: options=[{'value':True,'label':'开启'},{'value':False,'label':'关闭'}]
-        CHAT_CAPS[name]={'options':options}
-        return CHAT_CAPS[name]
-    except Exception:return {'options':[]}
+def request_download(keys):
+    for key in keys:
+        if key not in model_store.MANIFEST: raise ValueError('未知模型。')
+    with LOCK:
+        for key in keys:
+            if not model_store.ready(MODELS,key) and key not in DOWNLOADS['current'] and key not in DOWNLOADS['pending']:
+                DOWNLOADS['pending'].append(key)
+        start_next_download()
+
+def component_statuses():
+    active=set(DOWNLOADS['current']) if downloading() else set()
+    result={}
+    for key in model_store.MANIFEST:
+        s=model_store.status(MODELS,key)
+        s.update(downloading=key in active,queued=key in DOWNLOADS['pending'])
+        result[key]=s
+    if active:
+        # Bytes of the file in flight belong to the first unfinished active component.
+        partial=model_store.partial_bytes(MODELS)
+        for key in DOWNLOADS['current']:
+            if not result[key]['ready']:
+                result[key]['bytes']=min(result[key]['total'],result[key]['bytes']+partial);break
+    return result
+
+def aggregate(statuses,keys,path=''):
+    items=[statuses[k] for k in keys]
+    total=sum(x['total'] for x in items);done=sum(x['bytes'] for x in items)
+    running=any(x['downloading'] or x['queued'] for x in items)
+    now=time.monotonic();samples=DOWNLOADS['samples'];samples.append((now,sum(s['bytes'] for s in statuses.values())))
+    while len(samples)>1 and samples[0][0]<now-15: samples.pop(0)
+    elapsed=now-samples[0][0];speed=max(0,(samples[-1][1]-samples[0][1])/elapsed) if elapsed>1 else 0
+    ready=all(x['ready'] for x in items)
+    return {'ready':ready,'downloading':running,'bytes':done,'total':total,'speed':speed if running else 0,
+            'eta':(total-done)/speed if running and speed>1024 else None,'verifying':running and done>=total and not ready,
+            'path':path,'error':DOWNLOADS['error'] if not running else '','components':keys}
+
+def system_status():
+    memory=psutil.virtual_memory();swap=psutil.swap_memory()
+    return {'free_disk':model_store.free_bytes(MODELS),'memory_available':memory.available,'memory_total':memory.total,'swap_used':swap.used}
 
 def status():
-    try:
-        with ollama('/api/tags') as r: models=json.load(r)['models']
-        models=[x['name'] for x in models if 'embedding' not in x['name'] and 'ocr' not in x['name'] and 'cloud' not in x['name']]
-        connected=True
-    except Exception: models=[];connected=False
-    with LOCK: active=JOBS.get(ACTIVE)
-    return {'model':model_status(),'enhancers':{key:ENHANCERS.status(key) for key in TARGETS},'ollama':connected,'chat_models':models,'chat_capabilities':{name:chat_capabilities(name) for name in models},'active':active,'pending':[JOBS[jid] for jid,_ in QUEUE],'data':str(DATA)}
+    prefs=preferences();statuses=component_statuses()
+    image=['base','text_encoder',model_store.VARIANTS[prefs['transformer_variant']]]
+    with LOCK:
+        active=JOBS.get(ACTIVE);pending=[JOBS[jid] for jid,_ in QUEUE]
+        return {'model':aggregate(statuses,image,str(MODELS)),'components':statuses,
+                'enhancers':{'pe-t2i':aggregate(statuses,['pe_t2i']),'pe-i2i':aggregate(statuses,['pe_i2i'])},
+                'variant':prefs['transformer_variant'],'active':active,'pending':pending,'data':str(DATA),'system':system_status()}
+
+# ---- Jobs
 
 def run_job(job, payload):
     global ACTIVE
-    sid=job['session_id'];proc=None
+    sid=job['session_id']
     try:
-        if payload['mode']=='chat':
-            job.update(stage='正在思考',progress=None)
-            messages=[{'role':'system','content':'You are a creative assistant. Reply in the user’s language. Help discuss ideas, compose scenes and write image prompts. You have no image tools. Never claim to have generated or edited images. Explain that the user can switch to Image mode to create them.'}]
-            messages += chat_history(sid,job['id'],payload['prompt'])
-            inp=DATA/'jobs'/f"{job['id']}.input.json";out=DATA/'jobs'/f"{job['id']}.status.json"
-            inp.write_text(json.dumps({'history':messages,'chat_model':payload['chat_model'],'think':payload.get('think'),'status_path':str(out)}), encoding='utf-8')
-            with (DATA/'jobs'/f"{job['id']}.log").open('w') as log:
-                proc=subprocess.Popen([sys.executable,str(ROOT/'backend/chat_worker.py'),str(inp)],stdout=log,stderr=log)
-                while proc.poll() is None:
-                    if job.get('cancel'):
-                        proc.terminate()
-                        try: proc.wait(timeout=5)
-                        except subprocess.TimeoutExpired: proc.kill();proc.wait()
-                        raise InterruptedError()
-                    if out.exists():
-                        with contextlib.suppress(Exception): job.update(json.loads(out.read_text(encoding='utf-8')))
-                    time.sleep(.2)
-            if out.exists(): job.update(json.loads(out.read_text(encoding='utf-8')))
-            if proc.returncode!=0: raise RuntimeError(job.get('error') or '聊天进程退出，请重试。')
-            message(sid,'assistant',job['text'],meta={'job_id':job['id'],'mode':'chat','model':payload['chat_model'],'think':payload.get('think')})
-        else:
-            # Release Ollama's idle model weights before the image model claims unified memory.
-            try:
-                with ollama('/api/ps') as r: loaded=json.load(r).get('models',[])
-                for m in loaded:
-                    with ollama('/api/generate',{'model':m['name'],'keep_alive':0},timeout=30) as r: r.read()
-            except Exception: pass
-            result=run_image_job(job,payload,ROOT,DATA,MODEL,ENHANCERS)
-            message(sid,'assistant','图片已生成。',result['images'],result['meta'])
+        result=run_image_job(job,payload,ROOT,DATA,MODELS)
+        message(sid,'assistant','图片已生成。',result['images'],result['meta'])
         job.update(state='done',stage='完成',progress=1)
     except InterruptedError:
         job.update(state='cancelled',stage='已停止')
@@ -205,7 +188,6 @@ def run_job(job, payload):
                     message(queued['session_id'],'assistant','环境缺失，排队任务已停止。',meta={'cancelled':True,'job_id':queued_id})
                 QUEUE.clear()
     finally:
-        if proc and proc.poll() is None: proc.kill()
         with LOCK:
             ACTIVE=None
             advance_queue()
@@ -228,53 +210,71 @@ def cancel_job(jid):
             message(job['session_id'],'assistant','已取消排队。',meta={'cancelled':True,'job_id':job['id']})
         elif job['state']=='running':job.update(cancel=True,stage='正在停止')
 
-def start_job(p):
-    global ACTIVE
-    prompt=str(p.get('prompt','')).strip()
-    if not prompt or len(prompt)>16000: raise ValueError('请输入 1–16000 字的内容。')
-    if p.get('mode') not in ('chat','image'): raise ValueError('未知模式。')
-    read_session(p['session_id'])
+def validate_job(p):
+    """Normalise and validate a generation request in place (shared by /generate and /estimate)."""
+    prefs=preferences()
     refs=p.get('images',[])
     if not isinstance(refs,list) or len(refs)>10: raise ValueError('最多使用 10 张参考图。')
     for name in refs:
-        if Path(name).name!=name or not (DATA/'images'/name).is_file(): raise ValueError('参考图不存在，请重新添加。')
-    if p['mode']=='image':
-        if not model_status()['ready']: raise ValueError('模型还未下载完成。请在“模型设置”中下载或查看进度。')
-        for key in ['width','height']:
-            p[key]=int(p.get(key,2048))
-            if p[key]<256 or p[key]>2752 or p[key]%32: raise ValueError('图片尺寸须为 256–2752 之间的 32 的倍数。')
-        if p['width']*p['height']>4_300_800: raise ValueError('图片总像素暂不超过约 430 万，请选择支持的 2K 尺寸。')
-        p['steps']=int(p.get('steps',40))
-        if not 1<=p['steps']<=60: raise ValueError('步数须为 1–60。')
-        p['seed']=int(p.get('seed',-1))
-        if p['seed'] < -1 or p['seed']>2**32-1: raise ValueError('种子须为 -1 或 0–4294967295。')
-        p.setdefault('enhance',True);p.setdefault('ratio_mode','auto')
-        validate_options(p)
-        target='pe-i2i' if refs else 'pe-t2i'
-        if p['enhance'] and not ENHANCERS.status(target)['ready']:raise ValueError('请先下载本次任务所需的提示词增强模型。')
-    else:
-        if refs: raise ValueError('参考图用于“图像”模式，请先切换模式。')
-        with ollama('/api/tags') as r: available=[m['name'] for m in json.load(r)['models']]
-        if p.get('chat_model') not in available or 'cloud' in p['chat_model']: raise ValueError('请选择已安装的本地聊天模型。')
-        opts=chat_capabilities(p['chat_model'])['options']
-        chosen=p.get('think')
-        if chosen is None and opts: chosen='medium' if any(o['value']=='medium' for o in opts) else opts[0]['value']
-        if chosen is not None and not any(type(o['value']) is type(chosen) and o['value']==chosen for o in opts): raise ValueError('这个模型不支持所选思考设置。')
-        p['think']=chosen
+        if not isinstance(name,str) or Path(name).name!=name or not (DATA/'images'/name).is_file(): raise ValueError('参考图不存在，请重新添加。')
+    for key in ['width','height']:
+        p[key]=int(p.get(key,1024))
+        if p[key]<256 or p[key]>2752 or p[key]%32: raise ValueError('图片尺寸须为 256–2752 之间的 32 的倍数。')
+    if p['width']*p['height']>4_300_800: raise ValueError('图片总像素暂不超过约 430 万，请选择支持的 2K 尺寸。')
+    p['seed']=int(p.get('seed',-1))
+    if p['seed'] < -1 or p['seed']>2**32-1: raise ValueError('种子须为 -1 或 0–4294967295。')
+    p.setdefault('enhance',False);p.setdefault('ratio_mode','fixed')
+    validate_options(p)
+    p['steps']=int(p.get('steps',25))
+    if not 1<=p['steps']<=60: raise ValueError('步数须为 1–60。')
+    apply_preset(p)
+    p['variant']=p.get('variant') or prefs['transformer_variant']
+    if p['variant'] not in model_store.VARIANTS: raise ValueError('未知的模型版本。')
+    p['use_kv_cache']=bool(p.get('use_kv_cache',True))
+    p['previews']=bool(p.get('previews',True))
+    p['thinking_budget']=int(p.get('thinking_budget') or prefs['thinking_budget'])
+    return p
+
+def missing_components(p):
+    task=('edit' if p.get('images') else 't2i') if p.get('enhance') else None
+    keys=model_store.required_components(p['variant'],p['turbo'],task)
+    return [model_store.MANIFEST[k]['label'] for k in keys if not model_store.ready(MODELS,k)]
+
+def start_job(p):
+    prompt=str(p.get('prompt','')).strip()
+    if not prompt or len(prompt)>16000: raise ValueError('请输入 1–16000 字的内容。')
+    read_session(p['session_id'])
+    p['mode']='image'
+    validate_job(p)
+    missing=missing_components(p)
+    if missing: raise ValueError('请先在“模型设置”中下载：'+'、'.join(missing))
+    refs=p.get('images',[])
     with LOCK:
         if STOPPING: raise ValueError('应用正在关闭，请重新打开后发送。')
         if len(QUEUE)>=10: raise ValueError('已有 10 条消息排队，请稍后再发送。')
         jid=uuid.uuid4().hex
-        job={'id':jid,'session_id':p['session_id'],'state':'queued','stage':'等待前一个任务完成','progress':0,'text':'','started':time.time(),'mode':p['mode']}
-        if p['mode']=='image': job.update(width=p['width'],height=p['height'])
+        job={'id':jid,'session_id':p['session_id'],'state':'queued','stage':'等待前一个任务完成','progress':0,'text':'','started':time.time(),'mode':'image','width':p['width'],'height':p['height']}
         JOBS[jid]=job
         p['prompt']=prompt
-        message(p['session_id'],'user',prompt,refs,{'mode':p['mode'],'job_id':jid})
+        message(p['session_id'],'user',prompt,refs,{'mode':'image','job_id':jid,'preset':p.get('preset'),'variant':p['variant']})
         with connection() as c:
-            c.execute("UPDATE sessions SET title=? WHERE id=? AND title IN ('新会话','New chat')",(prompt[:28],p['session_id']))
+            c.execute("UPDATE sessions SET title=? WHERE id=? AND title IN ('新会话','New chat','Новый чат')",(prompt[:28],p['session_id']))
         QUEUE.append((jid,p.copy()))
         advance_queue()
     return job
+
+def estimate(p):
+    validate_job(p)
+    refs=len(p.get('images',[]))
+    side,cache=plan_references(refs,p['width'],p['height'],float(os.environ.get('QWEN_STUDIO_KV_BUDGET_GB','6')))
+    result=perf.estimate(DATA,width=p['width'],height=p['height'],steps=p['steps'],count=p.get('count',1),references=refs,
+        reference_side=side,cfg=p.get('cfg',1),enhance=p.get('enhance',False),dtype=os.environ.get('QWEN_STUDIO_DTYPE','auto').replace('auto','fp16'))
+    result.update(reference_resolution=side,kv_cache_gb=cache,missing=missing_components(p),steps=p['steps'],turbo=p['turbo'])
+    return result
+
+def diagnostics():
+    from environment_probe import collect
+    return list(collect(DATA))
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,*a): pass
@@ -317,19 +317,16 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError,KeyError) as e: self.send_json({'error':str(e),'environment_error':is_environment_error(e)},400)
         except Exception as e: self.send_json({'error':str(e),'environment_error':is_environment_error(e)},500)
     def do_POST(self):
-        global DOWNLOAD
         if not self.authorized(): return self.send_json({'error':'Unauthorized'},403)
         try:
             length=int(self.headers.get('Content-Length',0))
             if length>30*1024*1024: raise ValueError('文件过大，请使用小于 20 MB 的图片。')
             p=json.loads(self.rfile.read(length) or '{}');path=urlparse(self.path).path
-            if path=='/api/preferences':
-                with LOCK:
-                    if 'download_source' in p and (model_status()['downloading'] or any(ENHANCERS.status(key)['downloading'] for key in TARGETS)): raise ValueError('下载进行中，完成或中断后可更改下载源。')
-                    return self.send_json(preferences(p))
+            if path=='/api/preferences': return self.send_json(preferences(p))
             if path=='/api/sessions':
                 sid=uuid.uuid4().hex
-                with connection() as c: c.execute('INSERT INTO sessions VALUES(?,?,?,?)',(sid,'New chat' if self.headers.get('X-Studio-Language')=='en' else '新会话',time.time(),time.time()))
+                title={'en':'New chat','ru':'Новый чат'}.get(self.headers.get('X-Studio-Language'),'新会话')
+                with connection() as c: c.execute('INSERT INTO sessions VALUES(?,?,?,?)',(sid,title,time.time(),time.time()))
                 return self.send_json(read_session(sid))
             if path=='/api/session/delete':
                 with LOCK:
@@ -354,30 +351,19 @@ class Handler(BaseHTTPRequestHandler):
                 name=uuid.uuid4().hex+'.png';im.save(DATA/'images'/name)
                 return self.send_json({'image':name})
             if path=='/api/generate': return self.send_json(start_job(p))
+            if path=='/api/estimate': return self.send_json(estimate(p))
             if path=='/api/cancel':
                 cancel_job(p['id'])
                 return self.send_json({'ok':True})
             if path=='/api/model/download':
-                with LOCK:
-                    target=p.get('target','image')
-                    if target!='image':
-                        source=validate_source(p.get('source') or preferences()['download_source'])
-                        current=ENHANCERS.start(target,source)
-                        preferences({'download_source':source})
-                        return self.send_json(current)
-                    current=model_status()
-                    if current['ready']: return self.send_json(current)
-                    source=validate_source(p.get('source') or preferences()['download_source'])
-                    if current['downloading']:
-                        if source!=current['source']: raise ValueError('已有下载任务正在运行，请勿同时切换下载源。')
-                    else:
-                        preferences({'download_source':source})
-                        DOWNLOAD_SAMPLES.clear()
-                        (MODEL/'.download-source').write_text(source, encoding='utf-8')
-                        log=(DATA/'download.log').open('a')
-                        DOWNLOAD=subprocess.Popen([sys.executable,str(ROOT/'backend/download.py'),str(MODEL),source],stdout=log,stderr=log,start_new_session=True)
-                        log.close()
-                return self.send_json(model_status())
+                keys=p.get('components') or []
+                if not isinstance(keys,list) or not keys: raise ValueError('请选择要下载的模型。')
+                request_download(keys)
+                return self.send_json(status())
+            if path=='/api/reveal':
+                subprocess.run(['/usr/bin/open',str(DATA)],check=False)
+                return self.send_json({'ok':True})
+            if path=='/api/diagnostics': return self.send_json(diagnostics())
             return self.send_json({'error':'Not found'},404)
         except (ValueError,KeyError,TypeError) as e: self.send_json({'error':str(e),'environment_error':is_environment_error(e)},400)
         except Exception as e: self.send_json({'error':str(e),'environment_error':is_environment_error(e)},500)
@@ -392,8 +378,8 @@ if __name__=='__main__':
             STOPPING=True
             for jid,_payload in QUEUE[:]:cancel_job(jid)
             if ACTIVE: JOBS[ACTIVE]['cancel']=True
-        if DOWNLOAD and DOWNLOAD.poll() is None: os.killpg(DOWNLOAD.pid,signal.SIGTERM)
-        ENHANCERS.stop()
+            DOWNLOADS['pending'].clear()
+        if downloading(): os.killpg(DOWNLOADS['process'].pid,signal.SIGTERM)
         threading.Thread(target=server.shutdown,daemon=True).start()
     signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
     server.serve_forever()

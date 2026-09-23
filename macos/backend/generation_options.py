@@ -70,10 +70,35 @@ def resolve_size(p,rewrite=None,image_sizes=()):
     return width,height
 
 
-def diffusion_kwargs(p,prompt):
-    """Keep the reference-image pixel budget tied to area, including wide canvases."""
-    options=dict(prompt=prompt,width=p['width'],height=p['height'],num_inference_steps=p['steps'],
-        output_resolution=round(math.sqrt(p['width']*p['height'])),use_kv_cache=True,
-        true_cfg_scale=p.get('cfg',1),num_images_per_prompt=1)
-    if p.get('negative_prompt'):options['negative_prompt']=p['negative_prompt']
-    return options
+RGBA_TEMPLATE='This is an RGBA image with transparency. {} The image has alpha channel and the background is transparent.'
+
+# Speed presets. Turbo is the Viggle 4-step distillation: no CFG, no negative prompt.
+PRESETS={'turbo':dict(steps=4,turbo=True),'standard':dict(steps=25,turbo=False),'quality':dict(steps=40,turbo=False)}
+
+def apply_preset(p):
+    preset=p.get('preset','standard')
+    if preset not in PRESETS and preset!='custom':raise ValueError('未知的速度模式。')
+    if preset in PRESETS:
+        p.update(PRESETS[preset])
+    p['turbo']=bool(p.get('turbo',False))
+    if p['turbo'] and (p.get('cfg',1)>1 or p.get('negative_prompt')):raise ValueError('极速模式不支持反向提示词和引导强度。')
+    return p
+
+# The prefix KV cache keeps K and V for every text and reference token in all 32 blocks:
+# 2 × 32 heads × 128 × 2 bytes × 32 layers = 512 KiB per token (fp16/bf16).
+KV_BYTES_PER_TOKEN=512*1024
+REFERENCE_SIDES=(1024,896,768,640,512,384)
+
+def reference_tokens(count,side,text_tokens=300):
+    # One VAE token per 16×16 tile in the joint sequence, plus Qwen3-VL vision tokens (32×32 px each) in the text.
+    return text_tokens+count*((side//16)**2+(side//32)**2)
+
+def plan_references(count,width,height,budget_gb=6.0,text_tokens=300):
+    """Largest reference resolution whose prefix KV cache fits the budget; returns (side, cache GiB)."""
+    top=min(1024,max(384,round(math.sqrt(width*height))))
+    candidates=[side for side in REFERENCE_SIDES if side<=top] or [REFERENCE_SIDES[-1]]
+    for side in candidates:
+        gib=reference_tokens(count,side,text_tokens)*KV_BYTES_PER_TOKEN/1024**3
+        if gib<=budget_gb:return side,round(gib,2)
+    side=candidates[-1]
+    return side,round(reference_tokens(count,side,text_tokens)*KV_BYTES_PER_TOKEN/1024**3,2)

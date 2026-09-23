@@ -1,0 +1,421 @@
+{
+ "components": {
+  "base": {
+   "label": "Qwen-Image-2.1 configs, processor and VAE",
+   "required": true,
+   "files": [
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "LICENSE",
+     "dest": "Qwen-Image-2.1/LICENSE",
+     "size": 7831,
+     "sha256": "8dc973f024ff95966bea25866efa443fd16776dcb1001e681e3d467ea572b28d"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "model_index.json",
+     "dest": "Qwen-Image-2.1/model_index.json",
+     "size": 447,
+     "sha256": "cf1ecd104ea090855d60d8cec0895c1e9d6ee41b2f87e231b678beecd1cf7809"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "processor/added_tokens.json",
+     "dest": "Qwen-Image-2.1/processor/added_tokens.json",
+     "size": 707,
+     "sha256": "c0284b582e14987fbd3d5a2cb2bd139084371ed9acbae488829a1c900833c680"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "processor/chat_template.jinja",
+     "dest": "Qwen-Image-2.1/processor/chat_template.jinja",
+     "size": 5292,
+     "sha256": "3636d0f0bd6bef02654cdffdc447b79cb2cef8ab02cc75267345946291a489e4"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "processor/merges.txt",
+     "dest": "Qwen-Image-2.1/processor/merges.txt",
+     "size": 1671853,
+     "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "processor/preprocessor_config.json",
+     "dest": "Qwen-Image-2.1/processor/preprocessor_config.json",
+     "size": 782,
+     "sha256": "93585062a80db5e8ca038efc7726a3e6411d9db948472d81d63c6303993be8c5"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "processor/special_tokens_map.json",
+     "dest": "Qwen-Image-2.1/processor/special_tokens_map.json",
+     "size": 613,
+     "sha256": "76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "processor/tokenizer.json",
+     "dest": "Qwen-Image-2.1/processor/tokenizer.json",
+     "size": 11422654,
+     "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "processor/tokenizer_config.json",
+     "dest": "Qwen-Image-2.1/processor/tokenizer_config.json",
+     "size": 5445,
+     "sha256": "81ec7bb9530159b326c0bef1d0b6c33d392090524014ea3f0123a3c1eb9c2af5"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "processor/video_preprocessor_config.json",
+     "dest": "Qwen-Image-2.1/processor/video_preprocessor_config.json",
+     "size": 817,
+     "sha256": "59c5c9eb52182eb14c06ffb10ca9effd29adce5f238a95de23ca14a38dbd2cb1"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "processor/vocab.json",
+     "dest": "Qwen-Image-2.1/processor/vocab.json",
+     "size": 2776833,
+     "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "scheduler/scheduler_config.json",
+     "dest": "Qwen-Image-2.1/scheduler/scheduler_config.json",
+     "size": 485,
+     "sha256": "5895f3a167c14a967fe9ac70c64924ae5acc79799e0679fd12907e594a713cd1"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "transformer/config.json",
+     "dest": "Qwen-Image-2.1/transformer/config.json",
+     "size": 370,
+     "sha256": "56ae3281c4e6c2d1aa3658252d187488071815fd79bef15808bb0205fc1a2241"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "vae/config.json",
+     "dest": "Qwen-Image-2.1/vae/config.json",
+     "size": 2079,
+     "sha256": "9785d527b278cb8b210e9f48a8028d92a4190968ce7e24c8fc85d9d1b82f6ba2"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1",
+     "revision": "b3179ad355be050328e483a9dfdd9e60cd62adfa",
+     "path": "vae/diffusion_pytorch_model.safetensors",
+     "dest": "Qwen-Image-2.1/vae/diffusion_pytorch_model.safetensors",
+     "size": 1350989512,
+     "sha256": "a07a1b7c4ee2966a1b3bdc37de9b4f983d56937e46619f709a80b6e490675417"
+    }
+   ],
+   "total": 1366885720
+  },
+  "text_encoder": {
+   "label": "Text encoder Qwen3-VL-8B (SDNQ int8)",
+   "required": true,
+   "files": [
+    {
+     "repo": "OzzyGT/Qwen_Image_2_1_sdnq_dynamic_8bit",
+     "revision": "def359371741deed082c363f8ab76bc57ff742a5",
+     "path": "text_encoder/config.json",
+     "dest": "text_encoder-sdnq8/config.json",
+     "size": 37622,
+     "sha256": "135d6a303419bcdd83b8e5f60d97a40ff06d55671f8c1ae56f5224de7f2a3334"
+    },
+    {
+     "repo": "OzzyGT/Qwen_Image_2_1_sdnq_dynamic_8bit",
+     "revision": "def359371741deed082c363f8ab76bc57ff742a5",
+     "path": "text_encoder/generation_config.json",
+     "dest": "text_encoder-sdnq8/generation_config.json",
+     "size": 213,
+     "sha256": "6f0f51ed1b5adf526e59f1a9d25f7eafcdbe3ddbd86c0980fb112d18f3b28cf6"
+    },
+    {
+     "repo": "OzzyGT/Qwen_Image_2_1_sdnq_dynamic_8bit",
+     "revision": "def359371741deed082c363f8ab76bc57ff742a5",
+     "path": "text_encoder/model.safetensors",
+     "dest": "text_encoder-sdnq8/model.safetensors",
+     "size": 10031496088,
+     "sha256": "5a142b19aebe2df0e050b1cf88f0d92b3c516c6ca42e29492a02aa544e706cfc"
+    }
+   ],
+   "total": 10031533923
+  },
+  "transformer_official": {
+   "label": "Transformer (official, GGUF Q8_0)",
+   "required": true,
+   "files": [
+    {
+     "repo": "unsloth/Qwen-Image-2.1-GGUF",
+     "revision": "2c31ccd392b367a6637841a143813320a02dff55",
+     "path": "qwen-image-2.1-Q8_0.gguf",
+     "dest": "transformers/qwen-image-2.1-Q8_0.gguf",
+     "size": 7640860384,
+     "sha256": "c0ed4b2ffd56cbe9c3df1e4a4098045256484ebe94ba5a7e4338d35ec046baa5"
+    }
+   ],
+   "total": 7640860384
+  },
+  "transformer_uc": {
+   "label": "Transformer (uncensored, GGUF Q8_0)",
+   "required": false,
+   "files": [
+    {
+     "repo": "abenzerps/Qwen-Image-2.1-Uncensored-GGUF",
+     "revision": "26fee668287d4f4050e5734a553adf8c201aeb42",
+     "path": "qwen-image-2.1-UC-Q8_0.gguf",
+     "dest": "transformers/qwen-image-2.1-UC-Q8_0.gguf",
+     "size": 7591557920,
+     "sha256": "cde456c72ea3ecebfc1be783300e972711d875e0c5f1bed33d42b66b156affa8"
+    }
+   ],
+   "total": 7591557920
+  },
+  "turbo": {
+   "label": "Viggle turbo LoRA (4 steps)",
+   "required": false,
+   "files": [
+    {
+     "repo": "Viggle/Qwen-Image-2.1-viggle-turbo",
+     "revision": "bafc91e4cc934f5fb1406b22496a0bed9b99c548",
+     "path": "LICENSE",
+     "dest": "loras/viggle-turbo/LICENSE",
+     "size": 7831,
+     "sha256": "8dc973f024ff95966bea25866efa443fd16776dcb1001e681e3d467ea572b28d"
+    },
+    {
+     "repo": "Viggle/Qwen-Image-2.1-viggle-turbo",
+     "revision": "bafc91e4cc934f5fb1406b22496a0bed9b99c548",
+     "path": "NOTICE",
+     "dest": "loras/viggle-turbo/NOTICE",
+     "size": 998,
+     "sha256": "0f9abbee723e186b21cef21a1f1d0d69d1c5a5ac5c8381bae7425114ad2d68b9"
+    },
+    {
+     "repo": "Viggle/Qwen-Image-2.1-viggle-turbo",
+     "revision": "bafc91e4cc934f5fb1406b22496a0bed9b99c548",
+     "path": "Qwen-Image-2.1-viggle-turbo-4step-lora-r64.safetensors",
+     "dest": "loras/viggle-turbo/Qwen-Image-2.1-viggle-turbo-4step-lora-r64.safetensors",
+     "size": 339832808,
+     "sha256": "5c494dce662a95898d0988831af733b203ceced9116a82aa099c997f96ea1a3a"
+    },
+    {
+     "repo": "Viggle/Qwen-Image-2.1-viggle-turbo",
+     "revision": "bafc91e4cc934f5fb1406b22496a0bed9b99c548",
+     "path": "scheduler/scheduler_config.json",
+     "dest": "loras/viggle-turbo/scheduler/scheduler_config.json",
+     "size": 484,
+     "sha256": "5d6ddf326e7a1f63a7920dac94f70df2adf3710a92fe7ce3f7bfd30d559f37e4"
+    }
+   ],
+   "total": 339842121
+  },
+  "pe_t2i": {
+   "label": "Prompt enhancer PE-T2I (MLX 4-bit)",
+   "required": false,
+   "files": [
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-T2I-MLX",
+     "revision": "2d26ac502b16396fdd4b0cc21cc667831a7f6454",
+     "path": "4bit/chat_template.jinja",
+     "dest": "pe/t2i-mlx4/chat_template.jinja",
+     "size": 7756,
+     "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-T2I-MLX",
+     "revision": "2d26ac502b16396fdd4b0cc21cc667831a7f6454",
+     "path": "4bit/config.json",
+     "dest": "pe/t2i-mlx4/config.json",
+     "size": 3854,
+     "sha256": "a2032f88a09197bb201e2a7520fc7ac6ca62e142d6d24f6a320701f9face10b8"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-T2I-MLX",
+     "revision": "2d26ac502b16396fdd4b0cc21cc667831a7f6454",
+     "path": "4bit/generation_config.json",
+     "dest": "pe/t2i-mlx4/generation_config.json",
+     "size": 204,
+     "sha256": "51d4fa935eab282d38d611f46141548142ac8dea36c1fafd5314c5c015f20acd"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-T2I-MLX",
+     "revision": "2d26ac502b16396fdd4b0cc21cc667831a7f6454",
+     "path": "4bit/model-00001-of-00002.safetensors",
+     "dest": "pe/t2i-mlx4/model-00001-of-00002.safetensors",
+     "size": 5349769780,
+     "sha256": "c560deaad5cbb4b93a40ab0650d003ebd48a6a799761860db4cd00bd8cb34642"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-T2I-MLX",
+     "revision": "2d26ac502b16396fdd4b0cc21cc667831a7f6454",
+     "path": "4bit/model-00002-of-00002.safetensors",
+     "dest": "pe/t2i-mlx4/model-00002-of-00002.safetensors",
+     "size": 600449850,
+     "sha256": "e7be199711c0f0bde0d0f013d438385150cbe5c867f9a7ffe79429a04805f5be"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-T2I-MLX",
+     "revision": "2d26ac502b16396fdd4b0cc21cc667831a7f6454",
+     "path": "4bit/model.safetensors.index.json",
+     "dest": "pe/t2i-mlx4/model.safetensors.index.json",
+     "size": 123592,
+     "sha256": "4518e4d98baed265cb25c5adb45839d5b69e0b9700f4bd573533392097bbb874"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-T2I-MLX",
+     "revision": "2d26ac502b16396fdd4b0cc21cc667831a7f6454",
+     "path": "4bit/processor_config.json",
+     "dest": "pe/t2i-mlx4/processor_config.json",
+     "size": 991,
+     "sha256": "0b6914a28baac03bd598699d7223d2df2403a904baded62b7ed1fcb5c3b53205"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-T2I-MLX",
+     "revision": "2d26ac502b16396fdd4b0cc21cc667831a7f6454",
+     "path": "4bit/tokenizer.json",
+     "dest": "pe/t2i-mlx4/tokenizer.json",
+     "size": 19989343,
+     "sha256": "87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-T2I-MLX",
+     "revision": "2d26ac502b16396fdd4b0cc21cc667831a7f6454",
+     "path": "4bit/tokenizer_config.json",
+     "dest": "pe/t2i-mlx4/tokenizer_config.json",
+     "size": 1195,
+     "sha256": "d31e4f848da45ecf70ec28e51f680f96222e74217570d6a74d3c823a6f669f37"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1-PE-T2I",
+     "revision": "f3ed7985c788ad75b3ab7223e0c4c51e2a43545b",
+     "path": "LICENSE",
+     "dest": "pe/t2i-mlx4/LICENSE",
+     "size": 7831,
+     "sha256": "8dc973f024ff95966bea25866efa443fd16776dcb1001e681e3d467ea572b28d"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1-PE-T2I",
+     "revision": "f3ed7985c788ad75b3ab7223e0c4c51e2a43545b",
+     "path": "system_prompt.txt",
+     "dest": "pe/t2i-mlx4/system_prompt.txt",
+     "size": 10045,
+     "sha256": "a77c9a06c59b120741141d9514b95682bb8761d02bec49ca61def7b2b3d9fb99"
+    }
+   ],
+   "total": 5970364441
+  },
+  "pe_i2i": {
+   "label": "Prompt enhancer PE-I2I (MLX 4-bit)",
+   "required": false,
+   "files": [
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-I2I-MLX",
+     "revision": "75172ef3e7b681eae8f82b9ca20f81885557018d",
+     "path": "4bit/chat_template.jinja",
+     "dest": "pe/i2i-mlx4/chat_template.jinja",
+     "size": 7756,
+     "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-I2I-MLX",
+     "revision": "75172ef3e7b681eae8f82b9ca20f81885557018d",
+     "path": "4bit/config.json",
+     "dest": "pe/i2i-mlx4/config.json",
+     "size": 3768,
+     "sha256": "76d3f4bc535e6f47f1c16269b64c2a2c5bbc15eb761b4b0cbc2732a299b3773d"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-I2I-MLX",
+     "revision": "75172ef3e7b681eae8f82b9ca20f81885557018d",
+     "path": "4bit/generation_config.json",
+     "dest": "pe/i2i-mlx4/generation_config.json",
+     "size": 178,
+     "sha256": "2d92457211a50894a21ea309b73c86db69672350709c864e32744ca377a3e503"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-I2I-MLX",
+     "revision": "75172ef3e7b681eae8f82b9ca20f81885557018d",
+     "path": "4bit/model-00001-of-00002.safetensors",
+     "dest": "pe/i2i-mlx4/model-00001-of-00002.safetensors",
+     "size": 5349769780,
+     "sha256": "5fa80083c8b23a5ca96a3dcf751567eb29657a3f1e888a0c7dda68ddaf5b3f21"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-I2I-MLX",
+     "revision": "75172ef3e7b681eae8f82b9ca20f81885557018d",
+     "path": "4bit/model-00002-of-00002.safetensors",
+     "dest": "pe/i2i-mlx4/model-00002-of-00002.safetensors",
+     "size": 600449850,
+     "sha256": "b9cf0d4b736cdf0d486e01873b04ea2f1dcb8b6e56b6ff2ad13526db3f8508fc"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-I2I-MLX",
+     "revision": "75172ef3e7b681eae8f82b9ca20f81885557018d",
+     "path": "4bit/model.safetensors.index.json",
+     "dest": "pe/i2i-mlx4/model.safetensors.index.json",
+     "size": 123592,
+     "sha256": "4518e4d98baed265cb25c5adb45839d5b69e0b9700f4bd573533392097bbb874"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-I2I-MLX",
+     "revision": "75172ef3e7b681eae8f82b9ca20f81885557018d",
+     "path": "4bit/processor_config.json",
+     "dest": "pe/i2i-mlx4/processor_config.json",
+     "size": 991,
+     "sha256": "0b6914a28baac03bd598699d7223d2df2403a904baded62b7ed1fcb5c3b53205"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-I2I-MLX",
+     "revision": "75172ef3e7b681eae8f82b9ca20f81885557018d",
+     "path": "4bit/tokenizer.json",
+     "dest": "pe/i2i-mlx4/tokenizer.json",
+     "size": 19989343,
+     "sha256": "87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4"
+    },
+    {
+     "repo": "prithivMLmods/Qwen-Image-2.1-PE-I2I-MLX",
+     "revision": "75172ef3e7b681eae8f82b9ca20f81885557018d",
+     "path": "4bit/tokenizer_config.json",
+     "dest": "pe/i2i-mlx4/tokenizer_config.json",
+     "size": 1195,
+     "sha256": "d31e4f848da45ecf70ec28e51f680f96222e74217570d6a74d3c823a6f669f37"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1-PE-I2I",
+     "revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+     "path": "LICENSE",
+     "dest": "pe/i2i-mlx4/LICENSE",
+     "size": 7831,
+     "sha256": "8dc973f024ff95966bea25866efa443fd16776dcb1001e681e3d467ea572b28d"
+    },
+    {
+     "repo": "Qwen/Qwen-Image-2.1-PE-I2I",
+     "revision": "72927bc08afc99b7888ceb7d7d51a12db3700bbd",
+     "path": "system_prompt.txt",
+     "dest": "pe/i2i-mlx4/system_prompt.txt",
+     "size": 18344,
+     "sha256": "e378fea686a1431581ba4c654d332ae96adad633f144ae738ec8ce9c4fd66439"
+    }
+   ],
+   "total": 5970372628
+  }
+ }
+}

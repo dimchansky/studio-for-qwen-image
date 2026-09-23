@@ -8,15 +8,14 @@ import json
 import os
 from pathlib import Path
 import platform
-import shutil
 import subprocess
 import sys
 import tempfile
-from urllib.request import Request, build_opener, ProxyHandler
 
 PACKAGES = ('torch', 'torchvision', 'transformers', 'diffusers', 'accelerate', 'PIL',
-            'psutil', 'filelock', 'safetensors', 'huggingface_hub', 'numpy', 'tokenizers')
-LABELS = {'PIL': 'Pillow', 'huggingface_hub': 'Hugging Face Hub'}
+            'psutil', 'filelock', 'safetensors', 'huggingface_hub', 'numpy', 'tokenizers',
+            'gguf', 'sdnq', 'peft', 'mlx', 'mlx_vlm')
+LABELS = {'PIL': 'Pillow', 'huggingface_hub': 'Hugging Face Hub', 'mlx_vlm': 'MLX-VLM'}
 
 
 def record(key, title, state, detail='', required=True):
@@ -42,10 +41,15 @@ def inspect_child(name):
         source=inspect.getsource(QwenImage21Pipeline._get_qwen_prompt_embeds)
         if 'norm.register_forward_hook' not in source:
             raise RuntimeError('当前文字编码接口与固定版本不一致，请修复环境。')
-        return 'QwenImage21Pipeline / FP32 VAE / text encoder fix'
+        # The staged pipeline (staged_pipeline.py) and the MPS VAE patch rely on these internals.
+        from diffusers.models.autoencoders.autoencoder_kl_qwenimage21 import QwenImage21AvgDown3D
+        from diffusers import QwenImage21Transformer2DModel
+        if 'image_pad_mask' not in inspect.signature(QwenImage21Pipeline.encode_prompt).parameters or not hasattr(QwenImage21Pipeline,'_encode_vae_image') or not hasattr(QwenImage21Transformer2DModel,'from_single_file'):
+            raise RuntimeError('当前文字编码接口与固定版本不一致，请修复环境。')
+        return 'QwenImage21Pipeline / GGUF / staged encoding / MPS VAE patch'
     if name == 'enhancer':
-        from transformers import AutoModelForImageTextToText, AutoProcessor, Qwen3_5ForConditionalGeneration
-        return 'Qwen3.5 / PE-T2I / PE-I2I'
+        import mlx_vlm.models.qwen3_5  # noqa: F401  (PE-T2I / PE-I2I architecture)
+        return 'MLX-VLM Qwen3.5 / PE-T2I / PE-I2I'
     if name == 'gpu':
         import torch
         if platform.system() == 'Darwin':
@@ -61,14 +65,15 @@ def inspect_child(name):
             device = 'cuda'
             label = torch.cuda.get_device_name(0)
         # A few bytes confirm that the driver executes work. This is not model inference.
-        value = torch.ones((2, 2), device=device, dtype=torch.bfloat16)
-        if (value @ value).float().cpu().tolist() != [[2., 2.], [2., 2.]]:
-            raise RuntimeError('GPU 基础运算检查失败。')
+        for dtype in (torch.float16, torch.bfloat16):
+            value = torch.ones((2, 2), device=device, dtype=dtype)
+            if (value @ value).float().cpu().tolist() != [[2., 2.], [2., 2.]]:
+                raise RuntimeError('GPU 基础运算检查失败。')
         return label
     module = importlib.import_module(name)
     if name in ('torch','transformers'):
         from packaging.version import Version
-        minimum={'torch':'2.4.0','transformers':'5.17.0'}[name]
+        minimum={'torch':'2.14.0','transformers':'5.17.0'}[name]
         if Version(module.__version__)<Version(minimum):raise RuntimeError(f'{name} >= {minimum} is required')
     return str(getattr(module, '__version__', '已安装'))
 
@@ -89,7 +94,7 @@ def run_child(name, timeout=60):
     return report['detail']
 
 
-def collect(data, check=run_child, opener=None):
+def collect(data, check=run_child):
     """Yield each status change; failed checks never become successes by omission."""
     valid = (3, 10) <= sys.version_info[:2] < (3, 14) and sys.maxsize > 2**32
     yield record('python', 'Python 运行环境', 'pass' if valid else 'fail', platform.python_version() if valid else '需要 64 位 Python 3.10–3.13。')
@@ -114,15 +119,6 @@ def collect(data, check=run_child, opener=None):
             value = record(key, title, 'fail', '无法加载，请安装或修复依赖。')
             value['diagnostic'] = str(error)[:1500]
             yield value
-    curl = shutil.which('curl.exe') or shutil.which('curl')
-    yield record('curl', '模型下载工具', 'pass' if curl else 'fail', 'curl' if curl else '未找到 curl，请修复系统下载工具。')
-    try:
-        client = opener or build_opener(ProxyHandler({}))
-        with client.open(Request('http://127.0.0.1:11434/api/tags'), timeout=3) as response:
-            models = json.load(response).get('models', [])
-        yield record('ollama', 'Ollama 对话', 'pass' if models else 'optional', '已连接本机 Ollama' if models else '先在 Ollama 下载一个聊天模型；不影响生图。', False)
-    except Exception:
-        yield record('ollama', 'Ollama 对话', 'optional', '未连接 Ollama；不影响生图。', False)
 
 
 def ready(items):
